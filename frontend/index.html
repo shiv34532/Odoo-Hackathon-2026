@@ -167,6 +167,17 @@
 
       <!-- TAB: DASHBOARD -->
       <section id="tab-dashboard" class="tab-pane">
+        <!-- Dashboard Welcome Banner Card -->
+        <div class="welcome-card card">
+          <div class="welcome-card-content">
+            <h2 id="welcome-message">Welcome to TransitOps Console</h2>
+            <p>Here is your enterprise logistics summary for today. Your fleet efficiency is fully optimized.</p>
+          </div>
+          <div class="welcome-card-decor">
+            <i class="bx bxs-circle-quarter"></i>
+          </div>
+        </div>
+
         <!-- KPI Cards Grid -->
         <div class="kpi-grid">
           <div class="kpi-card text-purple">
@@ -271,7 +282,7 @@
           </div>
         </div>
 
-        <!-- Charts and Bulletins Split Grid -->
+        <!-- Split Grid (Charts, Alerts, Activities) -->
         <div class="dashboard-visuals">
           <div class="visual-card card">
             <div class="card-header">
@@ -290,6 +301,16 @@
             </div>
             <div class="alerts-list" id="dashboard-safety-alerts">
               <!-- Safety alerts injected by JS -->
+            </div>
+          </div>
+
+          <div class="visual-card card">
+            <div class="card-header">
+              <h3>Live Operations Feed</h3>
+              <p>Real-time updates of trips and maintenance orders</p>
+            </div>
+            <div class="activity-feed-list" id="dashboard-activity-feed">
+              <!-- Activity log items injected by JS -->
             </div>
           </div>
         </div>

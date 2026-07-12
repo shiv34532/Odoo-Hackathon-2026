@@ -258,27 +258,142 @@ function loadTabData(tabName) {
 
 // =================---------------- DASHBOARD LOADERS ----------------=================
 
+// Counter animation helper
+function animateCounter(elementId, targetVal, isPct = false) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  
+  let start = 0;
+  const end = parseInt(targetVal || 0);
+  
+  if (start === end) {
+    el.textContent = end + (isPct ? '%' : '');
+    return;
+  }
+  
+  const duration = 700; // ms
+  const stepTime = Math.abs(Math.floor(duration / (end || 1)));
+  const timer = setInterval(() => {
+    start++;
+    el.textContent = start + (isPct ? '%' : '');
+    if (start >= end) {
+      el.textContent = end + (isPct ? '%' : '');
+      clearInterval(timer);
+    }
+  }, Math.max(stepTime, 15));
+}
+
 async function fetchDashboardStats() {
   try {
     let url = `${API_BASE}/reports/overview`;
     const res = await authFetch(url);
     const data = await res.json();
 
-    document.getElementById('kpi-active-vehicles').textContent = data.activeVehicles;
-    document.getElementById('kpi-available-vehicles').textContent = data.availableVehicles;
-    document.getElementById('kpi-in-shop-vehicles').textContent = data.maintenanceVehicles;
-    document.getElementById('kpi-active-trips').textContent = data.activeTrips;
-    document.getElementById('kpi-pending-trips').textContent = data.pendingTrips;
-    document.getElementById('kpi-drivers-on-duty').textContent = data.driversOnDuty;
-    document.getElementById('kpi-utilization-pct').textContent = `${data.fleetUtilization}%`;
+    // Welcome message role update
+    if (state.user) {
+      document.getElementById('welcome-message').innerHTML = `Welcome back, ${state.user.name}! <span style="font-size: 11px; font-weight: 700; vertical-align: middle; margin-left: 8px;" class="badge badge-info">${state.user.role}</span>`;
+    }
+
+    // Animate KPI counters
+    animateCounter('kpi-active-vehicles', data.activeVehicles);
+    animateCounter('kpi-available-vehicles', data.availableVehicles);
+    animateCounter('kpi-in-shop-vehicles', data.maintenanceVehicles);
+    animateCounter('kpi-active-trips', data.activeTrips);
+    animateCounter('kpi-pending-trips', data.pendingTrips);
+    animateCounter('kpi-drivers-on-duty', data.driversOnDuty);
+    animateCounter('kpi-utilization-pct', data.fleetUtilization, true);
 
     // Render interactive chart composition
     updateFleetChart(data.availableVehicles, data.activeVehicles, data.maintenanceVehicles);
 
-    // Load safety alerts
+    // Load safety alerts & operations feed
     loadSafetyAlerts();
+    loadOperationsFeed();
   } catch (err) {
     console.error('Error loading dashboard stats:', err);
+  }
+}
+
+// Live operations Activity Feed loader
+async function loadOperationsFeed() {
+  try {
+    const resTrips = await authFetch(`${API_BASE}/trips`);
+    const trips = await resTrips.json();
+    
+    const resMaint = await authFetch(`${API_BASE}/maintenance`);
+    const maints = await resMaint.json();
+
+    const feedBox = document.getElementById('dashboard-activity-feed');
+    if (!feedBox) return;
+    feedBox.innerHTML = '';
+
+    const activities = [];
+
+    // Map trips
+    trips.forEach(t => {
+      if (t.status === 'Completed') {
+        activities.push({
+          text: `Trip <strong>#${t.id}</strong> (Src: ${t.source}) completed by driver ${t.driver_name}`,
+          time: t.completed_at ? new Date(t.completed_at) : new Date(),
+          icon: 'bx-check-circle',
+          color: 'var(--color-success)'
+        });
+      } else if (t.status === 'Dispatched') {
+        activities.push({
+          text: `Trip <strong>#${t.id}</strong> to ${t.destination} has been Dispatched`,
+          time: new Date(),
+          icon: 'bx-navigation',
+          color: 'var(--color-info)'
+        });
+      } else if (t.status === 'Cancelled') {
+        activities.push({
+          text: `Trip <strong>#${t.id}</strong> was Cancelled`,
+          time: new Date(),
+          icon: 'bx-x-circle',
+          color: 'var(--color-danger)'
+        });
+      }
+    });
+
+    // Map maintenance
+    maints.forEach(m => {
+      if (m.status === 'Active') {
+        activities.push({
+          text: `Vehicle <strong>${m.vehicle_reg}</strong> entered repair shop: "${m.description}"`,
+          time: new Date(m.start_date),
+          icon: 'bx-wrench',
+          color: 'var(--color-warning)'
+        });
+      } else if (m.status === 'Closed') {
+        activities.push({
+          text: `Vehicle <strong>${m.vehicle_reg}</strong> maintenance order closed. Expense filed.`,
+          time: new Date(m.end_date || m.start_date),
+          icon: 'bx-check-square',
+          color: 'var(--color-success)'
+        });
+      }
+    });
+
+    // Sort by date (newest first)
+    activities.sort((a, b) => b.time - a.time);
+
+    // Render top 5
+    const renderList = activities.slice(0, 5);
+    if (renderList.length === 0) {
+      feedBox.innerHTML = '<div class="alert-item-text">No recent operations logged.</div>';
+      return;
+    }
+
+    renderList.forEach(act => {
+      feedBox.innerHTML += `
+        <div class="alert-item" style="border-left: 3px solid ${act.color};">
+          <i class="bx ${act.icon} alert-item-icon" style="color:${act.color};"></i>
+          <div class="alert-item-text">${act.text}</div>
+        </div>
+      `;
+    });
+  } catch (err) {
+    console.error('Error loading operations feed:', err);
   }
 }
 
@@ -306,7 +421,9 @@ function updateFleetChart(available, active, inShop) {
           '#f59e0b'  // Amber Warning
         ],
         borderWidth: isLight ? 1 : 0,
-        borderColor: isLight ? '#cbd5e1' : 'transparent'
+        borderColor: isLight ? '#cbd5e1' : 'transparent',
+        borderRadius: 6,
+        spacing: 4
       }]
     },
     options: {
