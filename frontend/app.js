@@ -198,48 +198,163 @@ btnLogout.addEventListener('click', () => {
   showNotification('Console session terminated.', 'success');
 });
 
+// Full RBAC Permission Map
+const ROLE_PERMISSIONS = {
+  'Fleet Manager': {
+    tabs: ['dashboard', 'vehicles', 'drivers', 'trips', 'maintenance', 'expenses', 'reports'],
+    canAddVehicle: true,
+    canEditVehicle: true,
+    canDeleteVehicle: true,
+    canAddDriver: true,
+    canEditDriver: true,
+    canDeleteDriver: true,
+    canCreateTrip: true,
+    canDispatchTrip: true,
+    canCompleteTrip: true,
+    canCancelTrip: true,
+    canAddMaintenance: true,
+    canCloseMaintenance: true,
+    canAddExpense: true,
+    canExportReport: true,
+    badgeColor: 'badge-info',
+    greeting: '🚛 Fleet Operations Console',
+    greetingSub: 'Full access — manage vehicles, drivers, dispatch, maintenance and finances'
+  },
+  'Safety Officer': {
+    tabs: ['dashboard', 'vehicles', 'drivers', 'trips', 'maintenance'],
+    canAddVehicle: false,
+    canEditVehicle: false,
+    canDeleteVehicle: false,
+    canAddDriver: true,
+    canEditDriver: true,
+    canDeleteDriver: false,
+    canCreateTrip: false,
+    canDispatchTrip: false,
+    canCompleteTrip: false,
+    canCancelTrip: false,
+    canAddMaintenance: true,
+    canCloseMaintenance: false,
+    canAddExpense: false,
+    canExportReport: false,
+    badgeColor: 'badge-warning',
+    greeting: '🛡️ Safety & Compliance Dashboard',
+    greetingSub: 'Monitor driver licenses, safety scores, and maintenance compliance'
+  },
+  'Driver': {
+    tabs: ['dashboard', 'vehicles', 'drivers', 'trips'],
+    canAddVehicle: false,
+    canEditVehicle: false,
+    canDeleteVehicle: false,
+    canAddDriver: false,
+    canEditDriver: false,
+    canDeleteDriver: false,
+    canCreateTrip: true,
+    canDispatchTrip: false,
+    canCompleteTrip: false,
+    canCancelTrip: false,
+    canAddMaintenance: false,
+    canCloseMaintenance: false,
+    canAddExpense: false,
+    canExportReport: false,
+    badgeColor: 'badge-success',
+    greeting: '🚗 Driver Operations Panel',
+    greetingSub: 'View assigned trips, vehicle details, and your current status'
+  },
+  'Financial Analyst': {
+    tabs: ['dashboard', 'vehicles', 'drivers', 'trips', 'expenses', 'reports'],
+    canAddVehicle: false,
+    canEditVehicle: false,
+    canDeleteVehicle: false,
+    canAddDriver: false,
+    canEditDriver: false,
+    canDeleteDriver: false,
+    canCreateTrip: false,
+    canDispatchTrip: false,
+    canCompleteTrip: false,
+    canCancelTrip: false,
+    canAddMaintenance: false,
+    canCloseMaintenance: false,
+    canAddExpense: true,
+    canExportReport: true,
+    badgeColor: 'badge-purple',
+    greeting: '📊 Financial Analytics Console',
+    greetingSub: 'Track fuel costs, expense ledgers, vehicle ROI and operational budgets'
+  }
+};
+
 // Update Header/Sidebar with logged-in user profile
 function updateUserUI() {
   if (!state.user) return;
-  document.getElementById('user-display-name').textContent = state.user.name;
-  document.getElementById('user-display-role').textContent = state.user.role;
-  document.getElementById('user-avatar-initial').textContent = state.user.name.charAt(0);
-
-  // Enforce RBAC CSS visibility controls
   const role = state.user.role;
-  
-  // Reset all elements
-  document.querySelectorAll('.rbac-manager-only').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.rbac-safety-manager-only').forEach(el => el.classList.add('hidden'));
+  const perms = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS['Driver'];
 
-  // Grant role access
-  if (role === 'Fleet Manager') {
-    document.querySelectorAll('.rbac-manager-only').forEach(el => el.classList.remove('hidden'));
-    document.querySelectorAll('.rbac-safety-manager-only').forEach(el => el.classList.remove('hidden'));
-  } else if (role === 'Safety Officer') {
-    document.querySelectorAll('.rbac-safety-manager-only').forEach(el => el.classList.remove('hidden'));
+  // Update sidebar profile panel
+  document.getElementById('user-display-name').textContent = state.user.name;
+  document.getElementById('user-display-role').textContent = role;
+  document.getElementById('user-avatar-initial').textContent = state.user.name.charAt(0).toUpperCase();
+
+  // Color-code role badge in sidebar
+  const roleEl = document.getElementById('user-display-role');
+  roleEl.className = `user-role badge ${perms.badgeColor}`;
+
+  // --- NAV TAB VISIBILITY ---
+  const allNavIds = ['nav-vehicles', 'nav-drivers', 'nav-trips', 'nav-maintenance', 'nav-expenses', 'nav-reports'];
+  allNavIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const tabName = id.replace('nav-', '');
+    if (perms.tabs.includes(tabName)) {
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+  });
+
+  // --- BUTTON-LEVEL ACCESS CONTROL ---
+  // Vehicle buttons
+  const btnAddVehicle = document.getElementById('btn-add-vehicle');
+  if (btnAddVehicle) perms.canAddVehicle ? btnAddVehicle.classList.remove('hidden') : btnAddVehicle.classList.add('hidden');
+
+  // Driver buttons
+  const btnAddDriver = document.getElementById('btn-add-driver');
+  if (btnAddDriver) perms.canAddDriver ? btnAddDriver.classList.remove('hidden') : btnAddDriver.classList.add('hidden');
+
+  // Trip buttons
+  const btnCreateTrip = document.getElementById('btn-create-trip');
+  if (btnCreateTrip) perms.canCreateTrip ? btnCreateTrip.classList.remove('hidden') : btnCreateTrip.classList.add('hidden');
+
+  // Maintenance button
+  const btnAddMaint = document.getElementById('btn-add-maintenance');
+  if (btnAddMaint) perms.canAddMaintenance ? btnAddMaint.classList.remove('hidden') : btnAddMaint.classList.add('hidden');
+
+  // Expense button
+  const btnAddExpense = document.getElementById('btn-add-expense');
+  if (btnAddExpense) perms.canAddExpense ? btnAddExpense.classList.remove('hidden') : btnAddExpense.classList.add('hidden');
+
+  // CSV Export button
+  const btnExport = document.getElementById('btn-csv-export');
+  if (btnExport) perms.canExportReport ? btnExport.classList.remove('hidden') : btnExport.classList.add('hidden');
+
+  // Store permissions in state for dynamic table rendering
+  state.permissions = perms;
+
+  // Update welcome dashboard greeting based on role
+  const welcomeEl = document.getElementById('welcome-message');
+  if (welcomeEl) {
+    welcomeEl.innerHTML = `Welcome back, <strong>${state.user.name}</strong>! <span class="badge ${perms.badgeColor}" style="font-size:11px; margin-left:6px;">${role}</span>`;
   }
-  
-  // Custom navigation permissions view styling
-  const navVehicles = document.getElementById('nav-vehicles');
-  const navDrivers = document.getElementById('nav-drivers');
-  const navMaintenance = document.getElementById('nav-maintenance');
-  const navExpenses = document.getElementById('nav-expenses');
-  const navReports = document.getElementById('nav-reports');
-
-  // Reset navigation visibility
-  [navVehicles, navDrivers, navMaintenance, navExpenses, navReports].forEach(nav => nav.classList.remove('hidden'));
-
-  if (role === 'Driver') {
-    navMaintenance.classList.add('hidden');
-    navReports.classList.add('hidden');
-  } else if (role === 'Safety Officer') {
-    navExpenses.classList.add('hidden');
-    navReports.classList.add('hidden');
-  } else if (role === 'Financial Analyst') {
-    navMaintenance.classList.add('hidden');
+  const welcomeSubEl = document.getElementById('welcome-sub');
+  if (welcomeSubEl) {
+    welcomeSubEl.textContent = perms.greetingSub;
   }
 }
+
+// Guard: prevent direct tab access for unauthorized roles
+function canAccessTab(tabName) {
+  const perms = state.permissions || ROLE_PERMISSIONS[state.user?.role] || ROLE_PERMISSIONS['Driver'];
+  return perms.tabs.includes(tabName);
+}
+
 
 // Authenticated Fetch Helper
 async function authFetch(url, options = {}) {
@@ -284,7 +399,13 @@ navItems.forEach(item => {
 });
 
 function switchTab(tabName) {
+  // Guard: block unauthorized tab access
+  if (state.user && !canAccessTab(tabName)) {
+    showNotification(`⛔ Access Denied — ${state.user.role} role cannot access this section.`, 'danger');
+    return;
+  }
   state.activeTab = tabName;
+
   
   // Set active nav link
   navItems.forEach(nav => {
