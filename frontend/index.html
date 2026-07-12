@@ -353,8 +353,12 @@
               <h3>Fleet Analytics Visualization</h3>
               <p>Fleet breakdown by operational status</p>
             </div>
-            <div class="chart-container">
+            <div class="chart-container" style="position: relative;">
               <canvas id="chart-fleet-composition"></canvas>
+              <div id="chart-placeholder-message" class="hidden" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; color: var(--text-sub); font-size: 13px; font-family: 'Inter'; gap: 8px;">
+                <i class="bx bx-info-circle" style="font-size: 28px; color: var(--color-primary-glow);"></i>
+                <span>No fleet assets match the selected parameters.</span>
+              </div>
             </div>
           </div>
 

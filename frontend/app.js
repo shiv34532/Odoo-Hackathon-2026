@@ -495,7 +495,24 @@ async function loadOperationsFeed() {
 
 // Chart.js render helper
 function updateFleetChart(available, active, inShop) {
-  const ctx = document.getElementById('chart-fleet-composition').getContext('2d');
+  const canvas = document.getElementById('chart-fleet-composition');
+  const placeholder = document.getElementById('chart-placeholder-message');
+  const total = available + active + inShop;
+
+  if (total === 0) {
+    canvas.classList.add('hidden');
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (fleetChart) {
+      fleetChart.destroy();
+      fleetChart = null;
+    }
+    return;
+  } else {
+    canvas.classList.remove('hidden');
+    if (placeholder) placeholder.classList.add('hidden');
+  }
+
+  const ctx = canvas.getContext('2d');
   
   // Theme check
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
@@ -531,7 +548,36 @@ function updateFleetChart(available, active, inShop) {
           labels: {
             color: textColor,
             font: { family: 'Inter', size: 12, weight: '500' },
-            padding: 15
+            padding: 15,
+            generateLabels: function(chart) {
+              const data = chart.data;
+              if (data.labels.length && data.datasets.length) {
+                const dataset = data.datasets[0];
+                return data.labels.map((label, i) => {
+                  const value = dataset.data[i];
+                  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+                  return {
+                    text: `${label} (${pct}%)`,
+                    fillStyle: dataset.backgroundColor[i],
+                    strokeStyle: dataset.borderColor ? dataset.borderColor[i] : 'transparent',
+                    lineWidth: dataset.borderWidth,
+                    hidden: isNaN(dataset.data[i]) || chart.getDatasetMeta(0).data[i].hidden,
+                    index: i
+                  };
+                });
+              }
+              return [];
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const label = context.label || '';
+              const value = context.parsed || 0;
+              const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+              return ` ${label}: ${value} vehicles (${pct}%)`;
+            }
           }
         }
       },
