@@ -564,16 +564,17 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
 // ---------------- REPORT & ANALYTICS ROUTES ----------------
 
 app.get('/api/reports/overview', authenticateToken, async (req, res) => {
-  const { type, region } = req.query;
+  const { type, region, status } = req.query;
   
   try {
     const db = await getDb();
 
-    // Base conditions
-    let vehWhere = "WHERE status != 'Retired'";
-    let activeVehWhere = "WHERE status = 'On Trip'";
-    let availVehWhere = "WHERE status = 'Available'";
-    let maintVehWhere = "WHERE status = 'In Shop'";
+    // Base conditions — if status filter applied, use it; otherwise exclude Retired from total
+    let vehWhere      = status ? `WHERE status = '${status.replace(/'/g,"''")}'` : "WHERE status != 'Retired'";
+    let activeVehWhere = status ? `WHERE status = '${status.replace(/'/g,"''")}'` : "WHERE status = 'On Trip'";
+    let availVehWhere  = status ? `WHERE status = '${status.replace(/'/g,"''")}'` : "WHERE status = 'Available'";
+    let maintVehWhere  = status ? `WHERE status = '${status.replace(/'/g,"''")}'` : "WHERE status = 'In Shop'";
+
     let activeTripsWhere = "WHERE t.status = 'Dispatched'";
     let pendingTripsWhere = "WHERE t.status = 'Draft'";
     let completedTripsWhere = "WHERE t.status = 'Completed'";

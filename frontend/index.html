@@ -333,6 +333,16 @@
               </select>
             </div>
             <div class="filter-group">
+              <label for="filter-vehicle-status">Vehicle Status</label>
+              <select id="filter-vehicle-status">
+                <option value="">All Statuses</option>
+                <option value="Available">Available</option>
+                <option value="On Trip">On Trip</option>
+                <option value="In Shop">In Shop</option>
+                <option value="Retired">Retired</option>
+              </select>
+            </div>
+            <div class="filter-group">
               <label for="filter-vehicle-region">Region</label>
               <select id="filter-vehicle-region">
                 <option value="">All Regions</option>
@@ -342,7 +352,8 @@
                 <option value="East">East</option>
               </select>
             </div>
-            <button id="btn-apply-filters" class="btn btn-primary">Apply Filters</button>
+            <button id="btn-apply-filters" class="btn btn-primary"><i class="bx bx-filter-alt"></i> Apply Filters</button>
+            <button id="btn-reset-filters" class="btn btn-secondary"><i class="bx bx-reset"></i> Reset</button>
           </div>
         </div>
 

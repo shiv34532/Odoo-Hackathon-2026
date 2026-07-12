@@ -499,10 +499,11 @@ function animateCounter(elementId, targetVal, isPct = false) {
 
 async function fetchDashboardStats() {
   try {
-    const type = document.getElementById('filter-vehicle-type').value;
+    const type   = document.getElementById('filter-vehicle-type').value;
     const region = document.getElementById('filter-vehicle-region').value;
+    const status = document.getElementById('filter-vehicle-status').value;
     
-    let url = `${API_BASE}/reports/overview?type=${encodeURIComponent(type)}&region=${encodeURIComponent(region)}`;
+    let url = `${API_BASE}/reports/overview?type=${encodeURIComponent(type)}&region=${encodeURIComponent(region)}&status=${encodeURIComponent(status)}`;
     const res = await authFetch(url);
     const data = await res.json();
 
@@ -776,6 +777,15 @@ function updateFleetChart(available, active, inShop) {
 // Apply Filters
 document.getElementById('btn-apply-filters').addEventListener('click', () => {
   fetchDashboardStats();
+});
+
+// Reset Filters
+document.getElementById('btn-reset-filters').addEventListener('click', () => {
+  document.getElementById('filter-vehicle-type').value = '';
+  document.getElementById('filter-vehicle-status').value = '';
+  document.getElementById('filter-vehicle-region').value = '';
+  fetchDashboardStats();
+  showNotification('Filters cleared.', 'success');
 });
 
 async function loadSafetyAlerts() {
