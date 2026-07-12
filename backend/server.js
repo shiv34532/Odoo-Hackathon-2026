@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { getDb, initDb } = require('./database');
-const TripService = require('./tripService');
+const TripService = require('./services/tripService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -350,7 +350,7 @@ app.post('/api/trips', authenticateToken, async (req, res) => {
 
   try {
     const db = await getDb();
-    const tripId = await TripService.createTrip(db, {
+    const tripId = await TripService.createTrip({
       source,
       destination,
       vehicleId: vehicle_id,
@@ -372,8 +372,7 @@ app.put('/api/trips/:id/dispatch', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const db = await getDb();
-    await TripService.dispatchTrip(db, parseInt(id));
+    await TripService.dispatchTrip(parseInt(id));
     res.json({ message: 'Trip dispatched successfully. Vehicle and driver status set to On Trip.' });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -390,8 +389,7 @@ app.put('/api/trips/:id/complete', authenticateToken, async (req, res) => {
   }
 
   try {
-    const db = await getDb();
-    await TripService.completeTrip(db, parseInt(id), {
+    await TripService.completeTrip(parseInt(id), {
       finalOdometer: final_odometer,
       fuelLiters: fuel_liters || 0,
       fuelCost: fuel_cost || 0
@@ -407,8 +405,7 @@ app.put('/api/trips/:id/cancel', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const db = await getDb();
-    await TripService.cancelTrip(db, parseInt(id));
+    await TripService.cancelTrip(parseInt(id));
     res.json({ message: 'Trip cancelled successfully.' });
   } catch (error) {
     res.status(400).json({ error: error.message });
