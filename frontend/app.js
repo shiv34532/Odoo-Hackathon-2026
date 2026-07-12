@@ -1,5 +1,5 @@
 // ==========================================================================
-// TRANSITOPS FRONTEND CONTROLLER (VANILLA JS SPA)
+// TRANSITOPS FRONTEND CONTROLLER (ENTERPRISE EDITION)
 // ==========================================================================
 
 const API_BASE = '/api';
@@ -16,6 +16,9 @@ const state = {
   expenses: { fuelLogs: [], generalExpenses: [] },
   reports: []
 };
+
+// Global Chart Instance
+let fleetChart = null;
 
 // =================---------------- AUTHENTICATION & LOGIN ----------------=================
 
@@ -68,13 +71,29 @@ loginForm.addEventListener('submit', async (e) => {
     appContainer.classList.remove('hidden');
     
     updateUserUI();
-    showNotification('Logged in successfully', 'success');
+    showNotification('Access Granted. Workspace loaded.', 'success');
     switchTab('dashboard');
   } catch (err) {
     loginErrorAlert.textContent = err.message;
     loginErrorAlert.classList.remove('hidden');
   }
 });
+
+// Quick Login Helper
+window.quickLogin = function(role) {
+  const credentials = {
+    manager: { email: 'manager@transitops.com', pass: 'manager123' },
+    safety: { email: 'safety@transitops.com', pass: 'safety123' },
+    driver: { email: 'driver@transitops.com', pass: 'driver123' },
+    finance: { email: 'finance@transitops.com', pass: 'finance123' }
+  };
+  const creds = credentials[role];
+  if (creds) {
+    loginEmail.value = creds.email;
+    loginPassword.value = creds.pass;
+    loginForm.dispatchEvent(new Event('submit'));
+  }
+};
 
 // Handle Logout
 btnLogout.addEventListener('click', () => {
@@ -83,7 +102,7 @@ btnLogout.addEventListener('click', () => {
   localStorage.removeItem('transitops_token');
   localStorage.removeItem('transitops_user');
   checkAuth();
-  showNotification('Logged out successfully', 'success');
+  showNotification('Console session terminated.', 'success');
 });
 
 // Update Header/Sidebar with logged-in user profile
@@ -194,7 +213,7 @@ function switchTab(tabName) {
 
   // Dynamic header titles
   const titles = {
-    dashboard: { title: 'Dashboard', desc: 'Real-time fleet utilization & key performance parameters' },
+    dashboard: { title: 'Console Dashboard', desc: 'Real-time parameters, compliance tracking, and asset utilization' },
     vehicles: { title: 'Vehicle Registry', desc: 'Manage registered vehicles and monitor status logs' },
     drivers: { title: 'Driver Management', desc: 'Track driver qualifications, safety scores, and compliance' },
     trips: { title: 'Trips & Dispatch', desc: 'Assign vehicles and drivers to delivery routes' },
@@ -241,10 +260,6 @@ function loadTabData(tabName) {
 
 async function fetchDashboardStats() {
   try {
-    // Set query params if filters exist
-    const type = document.getElementById('filter-vehicle-type').value;
-    const region = document.getElementById('filter-vehicle-region').value;
-    
     let url = `${API_BASE}/reports/overview`;
     const res = await authFetch(url);
     const data = await res.json();
@@ -257,19 +272,59 @@ async function fetchDashboardStats() {
     document.getElementById('kpi-drivers-on-duty').textContent = data.driversOnDuty;
     document.getElementById('kpi-utilization-pct').textContent = `${data.fleetUtilization}%`;
 
-    // Visual Composition bar
-    const total = data.activeVehicles + data.availableVehicles + data.maintenanceVehicles;
-    if (total > 0) {
-      document.getElementById('bar-comp-available').style.width = `${(data.availableVehicles / total) * 100}%`;
-      document.getElementById('bar-comp-ontrip').style.width = `${(data.activeVehicles / total) * 100}%`;
-      document.getElementById('bar-comp-inshop').style.width = `${(data.maintenanceVehicles / total) * 100}%`;
-    }
+    // Render interactive chart composition
+    updateFleetChart(data.availableVehicles, data.activeVehicles, data.maintenanceVehicles);
 
-    // Load safety alerts (e.g. low safety scores, expired/expiring licenses)
+    // Load safety alerts
     loadSafetyAlerts();
   } catch (err) {
     console.error('Error loading dashboard stats:', err);
   }
+}
+
+// Chart.js render helper
+function updateFleetChart(available, active, inShop) {
+  const ctx = document.getElementById('chart-fleet-composition').getContext('2d');
+  
+  // Theme check
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const textColor = isLight ? '#0f172a' : '#f9fafb';
+
+  if (fleetChart) {
+    fleetChart.destroy();
+  }
+
+  fleetChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Available', 'On Trip', 'In Shop'],
+      datasets: [{
+        data: [available, active, inShop],
+        backgroundColor: [
+          '#10b981', // Emerald Success
+          '#8b5cf6', // Violet Purple
+          '#f59e0b'  // Amber Warning
+        ],
+        borderWidth: isLight ? 1 : 0,
+        borderColor: isLight ? '#cbd5e1' : 'transparent'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: textColor,
+            font: { family: 'Inter', size: 12, weight: '500' },
+            padding: 15
+          }
+        }
+      },
+      cutout: '72%'
+    }
+  });
 }
 
 // Apply Filters
@@ -341,7 +396,7 @@ async function loadSafetyAlerts() {
     });
 
     if (alertCount === 0) {
-      alertsBox.innerHTML = '<div class="alert-item-text">No active safety warnings. Operations are fully compliant!</div>';
+      alertsBox.innerHTML = '<div class="alert-item-text" style="color:var(--color-success);"><i class="bx bx-check-shield"></i> All operations fully compliant! No alerts.</div>';
     }
   } catch (err) {
     console.error('Error listing safety alerts:', err);
@@ -641,7 +696,7 @@ function renderTrips() {
       actionBtn = `<button class="btn btn-primary btn-sm" onclick="dispatchTrip(${t.id})"><i class="bx bx-navigation"></i> Dispatch</button>`;
     } else if (t.status === 'Dispatched') {
       actionBtn = `
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:6px;">
           <button class="btn btn-success btn-sm" onclick="openCompleteTripModal(${t.id})"><i class="bx bx-check-double"></i> Complete</button>
           <button class="btn btn-danger btn-sm" onclick="cancelTrip(${t.id})"><i class="bx bx-x"></i> Cancel</button>
         </div>
@@ -1068,7 +1123,6 @@ function renderReports() {
 
   // Attach auth token to export download link dynamically
   const exportBtn = document.getElementById('btn-csv-export');
-  exportBtn.href = `${API_BASE}/reports/export?token=${state.token}`;
   
   // Custom override to intercept export clicked to send header if needed
   exportBtn.onclick = async (e) => {
@@ -1110,6 +1164,11 @@ themeToggleBtn.addEventListener('click', () => {
   const newTheme = currentTheme === 'light' ? 'dark' : 'light';
   htmlEl.setAttribute('data-theme', newTheme);
   localStorage.setItem('transitops_theme', newTheme);
+
+  // Redraw chart to refresh font color immediately if on dashboard
+  if (state.activeTab === 'dashboard' && state.token) {
+    fetchDashboardStats();
+  }
 });
 
 // Load theme on startup
