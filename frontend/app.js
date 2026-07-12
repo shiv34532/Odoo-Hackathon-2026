@@ -738,6 +738,7 @@ formVehicle.addEventListener('submit', async (e) => {
     showNotification(`Vehicle ${payload.name_model} saved successfully!`, 'success');
     fetchVehicles();
   } catch (err) {
+    shakeElement(formVehicle);
     showNotification(err.message, 'danger');
   }
 });
@@ -869,6 +870,7 @@ formDriver.addEventListener('submit', async (e) => {
     showNotification(`Driver ${payload.name} saved successfully!`, 'success');
     fetchDrivers();
   } catch (err) {
+    shakeElement(formDriver);
     showNotification(err.message, 'danger');
   }
 });
@@ -996,6 +998,7 @@ formTrip.addEventListener('submit', async (e) => {
   const selectedVeh = selectTripVehicle.options[selectTripVehicle.selectedIndex];
   const maxCap = parseFloat(selectedVeh.getAttribute('data-capacity'));
   if (cargoWeight > maxCap) {
+    shakeElement(formTrip);
     showNotification(`Error: Cargo Weight exceeds vehicle's max capacity (${maxCap} kg)`, 'danger');
     return;
   }
@@ -1023,6 +1026,7 @@ formTrip.addEventListener('submit', async (e) => {
     showNotification('Draft trip created successfully.', 'success');
     fetchTrips();
   } catch (err) {
+    shakeElement(formTrip);
     showNotification(err.message, 'danger');
   }
 });
@@ -1300,6 +1304,7 @@ formExpense.addEventListener('submit', async (e) => {
     showNotification('Expense recorded.', 'success');
     fetchExpenses();
   } catch (err) {
+    shakeElement(formExpense);
     showNotification(err.message, 'danger');
   }
 });
