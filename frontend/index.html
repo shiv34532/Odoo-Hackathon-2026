@@ -27,9 +27,10 @@
   <!-- ================= AUTHENTICATION / LOGIN VIEW ================= -->
   <div id="login-container" class="auth-wrapper">
     <div class="auth-split-layout">
-      <!-- Left Column: Login Form -->
+      <!-- Left Column: Login / Register Pane -->
       <div class="auth-left-pane">
-        <div class="auth-card">
+        <!-- Card 1: Login Card -->
+        <div id="auth-card-login" class="auth-card">
           <div class="auth-header">
             <div class="logo">
               <i class="bx bxs-directions logo-icon"></i>
@@ -64,6 +65,8 @@
             </button>
           </form>
 
+          <p class="auth-toggle-text">Don't have an account? <a href="#" id="link-to-register">Register here</a></p>
+
           <div class="quick-login-section">
             <h4>Quick Test Login:</h4>
             <div class="quick-login-pills">
@@ -73,6 +76,66 @@
               <button class="pill-btn" onclick="quickLogin('finance')">Finance Analyst</button>
             </div>
           </div>
+        </div>
+
+        <!-- Card 2: Register Card (Initially hidden) -->
+        <div id="auth-card-register" class="auth-card hidden">
+          <div class="auth-header">
+            <div class="logo">
+              <i class="bx bxs-directions logo-icon"></i>
+              <span>TransitOps</span>
+            </div>
+            <h2>Create Account</h2>
+            <p>Register a new operator profile to enter the system.</p>
+          </div>
+
+          <div id="register-error-alert" class="alert alert-danger hidden"></div>
+
+          <form id="register-form">
+            <div class="form-group">
+              <label for="register-name">Full Name</label>
+              <div class="input-wrapper">
+                <i class="bx bx-user input-icon"></i>
+                <input type="text" id="register-name" placeholder="John Doe" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="register-email">Email Address</label>
+              <div class="input-wrapper">
+                <i class="bx bx-envelope input-icon"></i>
+                <input type="email" id="register-email" placeholder="name@company.com" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="register-password">Password</label>
+              <div class="input-wrapper">
+                <i class="bx bx-lock-alt input-icon"></i>
+                <input type="password" id="register-password" placeholder="••••••••" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="register-role">System Role</label>
+              <div class="input-wrapper">
+                <i class="bx bx-shield input-icon"></i>
+                <select id="register-role" required>
+                  <option value="Fleet Manager">Fleet Manager</option>
+                  <option value="Safety Officer">Safety Officer</option>
+                  <option value="Driver">Driver</option>
+                  <option value="Financial Analyst">Financial Analyst</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" id="btn-register-submit" class="btn btn-primary btn-block">
+              <span>Create Account</span>
+              <i class="bx bx-user-plus"></i>
+            </button>
+          </form>
+
+          <p class="auth-toggle-text">Already have an account? <a href="#" id="link-to-login">Login here</a></p>
         </div>
       </div>
       <!-- Right Column: Interactive Banner graphic -->

@@ -24,11 +24,50 @@ let fleetChart = null;
 
 const loginContainer = document.getElementById('login-container');
 const appContainer = document.getElementById('app-container');
+
+// Forms & Cards
+const authCardLogin = document.getElementById('auth-card-login');
+const authCardRegister = document.getElementById('auth-card-register');
 const loginForm = document.getElementById('login-form');
+const registerForm = document.getElementById('register-form');
+
+// Fields
 const loginEmail = document.getElementById('login-email');
 const loginPassword = document.getElementById('login-password');
+const registerName = document.getElementById('register-name');
+const registerEmail = document.getElementById('register-email');
+const registerPassword = document.getElementById('register-password');
+const registerRole = document.getElementById('register-role');
+
+// Toggles & Alerts
+const linkToRegister = document.getElementById('link-to-register');
+const linkToLogin = document.getElementById('link-to-login');
 const loginErrorAlert = document.getElementById('login-error-alert');
+const registerErrorAlert = document.getElementById('register-error-alert');
 const btnLogout = document.getElementById('btn-logout');
+
+// Form Input Shake Error Helper
+function shakeElement(element) {
+  element.classList.add('shake-error');
+  element.addEventListener('animationend', () => {
+    element.classList.remove('shake-error');
+  }, { once: true });
+}
+
+// Toggle between Login and Register views
+linkToRegister.addEventListener('click', (e) => {
+  e.preventDefault();
+  loginErrorAlert.classList.add('hidden');
+  authCardLogin.classList.add('hidden');
+  authCardRegister.classList.remove('hidden');
+});
+
+linkToLogin.addEventListener('click', (e) => {
+  e.preventDefault();
+  registerErrorAlert.classList.add('hidden');
+  authCardRegister.classList.add('hidden');
+  authCardLogin.classList.remove('hidden');
+});
 
 // Check Login on Launch
 function checkAuth() {
@@ -50,6 +89,13 @@ loginForm.addEventListener('submit', async (e) => {
 
   const email = loginEmail.value.trim();
   const password = loginPassword.value;
+
+  if (!email || !password) {
+    shakeElement(loginForm);
+    loginErrorAlert.textContent = 'Please enter both email and password';
+    loginErrorAlert.classList.remove('hidden');
+    return;
+  }
 
   try {
     const res = await fetch(`${API_BASE}/login`, {
@@ -74,8 +120,55 @@ loginForm.addEventListener('submit', async (e) => {
     showNotification('Access Granted. Workspace loaded.', 'success');
     switchTab('dashboard');
   } catch (err) {
+    shakeElement(loginForm);
     loginErrorAlert.textContent = err.message;
     loginErrorAlert.classList.remove('hidden');
+  }
+});
+
+// Handle Register Form Submit
+registerForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  registerErrorAlert.classList.add('hidden');
+
+  const name = registerName.value.trim();
+  const email = registerEmail.value.trim();
+  const password = registerPassword.value;
+  const role = registerRole.value;
+
+  if (!name || !email || !password || !role) {
+    shakeElement(registerForm);
+    registerErrorAlert.textContent = 'All fields are required';
+    registerErrorAlert.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, role })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+    // Save state
+    state.token = data.token;
+    state.user = data.user;
+    localStorage.setItem('transitops_token', data.token);
+    localStorage.setItem('transitops_user', JSON.stringify(data.user));
+
+    loginContainer.classList.add('hidden');
+    appContainer.classList.remove('hidden');
+    
+    updateUserUI();
+    showNotification('Account Created. Welcome to TransitOps!', 'success');
+    switchTab('dashboard');
+  } catch (err) {
+    shakeElement(registerForm);
+    registerErrorAlert.textContent = err.message;
+    registerErrorAlert.classList.remove('hidden');
   }
 });
 

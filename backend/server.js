@@ -71,6 +71,39 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.post('/api/register', async (req, res) => {
+  const { name, email, password, role } = req.body;
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ error: 'All fields (name, email, password, role) are required' });
+  }
+
+  const validRoles = ['Fleet Manager', 'Safety Officer', 'Driver', 'Financial Analyst'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: 'Invalid role selection' });
+  }
+
+  try {
+    const db = await getDb();
+    const existing = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    if (existing) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    const passwordHash = bcrypt.hashSync(password, 10);
+    const result = await db.run(
+      'INSERT INTO users (name, email, role, password_hash) VALUES (?, ?, ?, ?)',
+      [name, email, role, passwordHash]
+    );
+
+    const newUser = { id: result.lastID, name, email, role };
+    const token = jwt.sign(newUser, JWT_SECRET, { expiresIn: '12h' });
+
+    res.status(201).json({ token, user: newUser });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/me', authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });

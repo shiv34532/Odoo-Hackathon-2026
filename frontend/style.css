@@ -1087,3 +1087,62 @@ tr:hover td {
     opacity: 0.1;
   }
 }
+
+/* Shake animation for input/form validation errors */
+.shake-error {
+  animation: shakeAlert 0.4s ease-in-out;
+}
+
+@keyframes shakeAlert {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+/* Auth registration toggles */
+.auth-toggle-text {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-top: 20px;
+}
+
+.auth-toggle-text a {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.auth-toggle-text a:hover {
+  color: var(--color-primary-hover);
+  text-shadow: 0 0 10px var(--color-primary-glow);
+}
+
+/* Modern Select Styles override for registration */
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
+  padding-right: 40px !important;
+}
+
+/* Button micro-scale animation feedback */
+button, .btn {
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--transition-fast) ease, box-shadow var(--transition-fast) ease, background var(--transition-fast) ease;
+}
+
+button:active, .btn:active {
+  transform: scale(0.97) !important;
+}
+
+/* Add custom focus indicator glow border */
+input:focus, select:focus, textarea:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px var(--color-primary-glow) !important;
+}
