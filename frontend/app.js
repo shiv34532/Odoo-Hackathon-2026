@@ -1440,10 +1440,24 @@ function renderReports() {
   const tbody = document.getElementById('tbody-reports');
   tbody.innerHTML = '';
 
+  if (!state.reports || state.reports.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-sub); padding:32px;">No vehicle data available for reports.</td></tr>';
+    return;
+  }
+
   state.reports.forEach(r => {
-    let roiClass = 'badge-success';
-    if (parseFloat(r.roi) < 0) roiClass = 'badge-danger';
-    
+    // Null-safe numeric values
+    const dist       = Number(r.totalDistance      || 0).toFixed(1);
+    const fuelL      = Number(r.totalFuelLiters    || 0).toFixed(1);
+    const fuelCost   = Number(r.totalFuelCost      || 0).toFixed(2);
+    const maintCost  = Number(r.totalMaintenanceCost || 0).toFixed(2);
+    const opCost     = Number(r.totalOpCost        || 0).toFixed(2);
+    const revenue    = Number(r.totalRevenue       || 0).toFixed(2);
+    const fuelEff    = Number(r.fuelEfficiency     || 0).toFixed(2);
+    const roiVal     = Number(r.roi                || 0);
+    const roiPct     = (roiVal * 100).toFixed(2);
+
+    let roiClass = roiVal >= 0 ? 'badge-success' : 'badge-danger';
     let iconSrc = 'assets/van.png';
     if (r.type === 'Truck') iconSrc = 'assets/truck.png';
     if (r.type === 'Sedan') iconSrc = 'assets/sedan.png';
@@ -1453,18 +1467,21 @@ function renderReports() {
         <td>
           <div style="display:flex; align-items:center; gap:8px;">
             <img src="${iconSrc}" style="width:28px; height:28px; border-radius:4px; object-fit:cover; background:rgba(255,255,255,0.03);" alt="${r.type}">
-            <strong>${r.name_model} (${r.registration_number})</strong>
+            <div>
+              <strong>${r.name_model || '—'}</strong>
+              <div style="font-size:11px; color:var(--text-sub);">${r.registration_number}</div>
+            </div>
           </div>
         </td>
         <td>${r.type}</td>
-        <td>${r.totalDistance} km</td>
-        <td>${r.totalFuelLiters} L</td>
-        <td>$${r.totalFuelCost}</td>
-        <td>$${r.totalMaintenanceCost}</td>
-        <td>$${r.totalOpCost}</td>
-        <td>$${r.totalRevenue}</td>
-        <td>${r.fuelEfficiency} km/L</td>
-        <td><span class="badge ${roiClass}">${(r.roi * 100).toFixed(2)}%</span></td>
+        <td>${dist} km</td>
+        <td>${fuelL} L</td>
+        <td>$${fuelCost}</td>
+        <td>$${maintCost}</td>
+        <td>$${opCost}</td>
+        <td>$${revenue}</td>
+        <td>${fuelEff > 0 ? fuelEff + ' km/L' : '<span style="color:var(--text-muted)">N/A</span>'}</td>
+        <td><span class="badge ${roiClass}">${roiPct}%</span></td>
       </tr>
     `;
   });
