@@ -990,6 +990,7 @@ tr:hover td {
   position: relative;
   overflow: hidden;
   padding: 30px;
+  padding-right: 200px;
   border: none;
 }
 
@@ -1006,14 +1007,31 @@ tr:hover td {
   max-width: 600px;
 }
 
-.welcome-card-decor {
-  font-size: 110px;
-  opacity: 0.08;
+.welcome-card-graphic {
   position: absolute;
-  right: 20px;
-  top: -10px;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 130px;
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
-  transform: rotate(-15deg);
+}
+
+.welcome-banner-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.35));
+  animation: bannerFloat 5s infinite ease-in-out;
+}
+
+@keyframes bannerFloat {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
 }
 
 .activity-feed-list {
@@ -1045,5 +1063,11 @@ tr:hover td {
   .main-content {
     margin-left: 0;
     padding: 24px;
+  }
+  .welcome-card {
+    padding-right: 30px;
+  }
+  .welcome-card-graphic {
+    display: none;
   }
 }
