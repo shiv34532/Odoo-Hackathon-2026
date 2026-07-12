@@ -3,7 +3,7 @@ const assert = require('assert');
 const path = require('path');
 
 // Test Configuration
-const PORT = 3000;
+const PORT = 3001;
 const BASE_URL = `http://localhost:${PORT}/api`;
 let serverProcess = null;
 let authToken = '';
