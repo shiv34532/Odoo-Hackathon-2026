@@ -194,6 +194,10 @@
           <i class="bx bx-trending-up"></i>
           <span>Fleet Analytics</span>
         </a>
+        <a href="#settings" class="nav-item" data-tab="settings" id="nav-settings">
+          <i class="bx bx-cog"></i>
+          <span>Settings</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">
@@ -393,6 +397,103 @@
             </div>
             <div class="activity-feed-list" id="dashboard-activity-feed">
               <!-- Activity log items injected by JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: SETTINGS -->
+      <section id="tab-settings" class="tab-pane hidden">
+        <div class="welcome-card card" style="background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-info) 100%); margin-bottom: 24px;">
+          <div class="welcome-card-content">
+            <h2>Application Settings</h2>
+            <p>Configure depot details, units, and role permissions for your TransitOps deployment.</p>
+          </div>
+          <div class="welcome-card-graphic">
+            <img src="assets/settings.png" alt="Settings Illustration" class="welcome-banner-img">
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <div class="settings-card card">
+            <div class="card-header">
+              <h3>General Settings</h3>
+              <p>Depot and fleet defaults for your operations.</p>
+            </div>
+            <div class="settings-form">
+              <div class="form-group">
+                <label for="setting-depot-name">Depot Name</label>
+                <input type="text" id="setting-depot-name" value="Gandhinagar Depot GJT4">
+              </div>
+              <div class="form-group">
+                <label for="setting-currency">Currency</label>
+                <input type="text" id="setting-currency" value="INR (Rs)">
+              </div>
+              <div class="form-group">
+                <label for="setting-distance-unit">Distance Unit</label>
+                <input type="text" id="setting-distance-unit" value="Kilometers">
+              </div>
+              <button id="btn-save-settings" class="btn btn-primary">Save changes</button>
+            </div>
+          </div>
+
+          <div class="settings-card card">
+            <div class="card-header">
+              <h3>Role-Based Access (RBAC)</h3>
+              <p>Control tab access permissions by role.</p>
+            </div>
+            <div class="rbac-table-wrap">
+              <table class="rbac-table">
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Fleet</th>
+                    <th>Driver</th>
+                    <th>Trip</th>
+                    <th>Fuel/Exp.</th>
+                    <th>Analytics</th>
+                    <th>Settings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Fleet Manager</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                  </tr>
+                  <tr>
+                    <td>Dispatcher</td>
+                    <td>View</td>
+                    <td>–</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>–</td>
+                    <td>–</td>
+                  </tr>
+                  <tr>
+                    <td>Safety Officer</td>
+                    <td>–</td>
+                    <td>✓</td>
+                    <td>View</td>
+                    <td>–</td>
+                    <td>–</td>
+                    <td>–</td>
+                  </tr>
+                  <tr>
+                    <td>Financial Analyst</td>
+                    <td>View</td>
+                    <td>–</td>
+                    <td>–</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>–</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -728,7 +829,7 @@
             <input type="number" id="vehicle-odometer" placeholder="0" min="0">
           </div>
           <div class="form-group">
-            <label for="vehicle-cost">Acquisition Purchase Value ($)</label>
+            <label for="vehicle-cost">Acquisition Purchase Value (₹)</label>
             <input type="number" id="vehicle-cost" placeholder="0" min="0">
           </div>
         </div>
@@ -874,7 +975,7 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="trip-revenue">Trip Cargo Value / Earnings ($) *</label>
+            <label for="trip-revenue">Trip Cargo Value / Earnings (₹) *</label>
             <input type="number" id="trip-revenue" placeholder="800" required min="0">
           </div>
         </div>
@@ -910,7 +1011,7 @@
             <input type="number" id="complete-fuel-liters" placeholder="0" min="0" step="0.1">
           </div>
           <div class="form-group">
-            <label for="complete-fuel-cost">Fuel Transaction Cost ($)</label>
+            <label for="complete-fuel-cost">Fuel Transaction Cost (₹)</label>
             <input type="number" id="complete-fuel-cost" placeholder="0" min="0">
           </div>
         </div>
@@ -945,7 +1046,7 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="maint-cost">Estimated Service Budget ($)</label>
+            <label for="maint-cost">Estimated Service Budget (₹)</label>
             <input type="number" id="maint-cost" placeholder="0" min="0">
           </div>
           <div class="form-group">
@@ -992,7 +1093,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="expense-cost">Cost Amount ($) *</label>
+            <label for="expense-cost">Cost Amount (₹) *</label>
             <input type="number" id="expense-cost" placeholder="50" required min="1">
           </div>
         </div>

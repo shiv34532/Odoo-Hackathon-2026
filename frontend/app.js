@@ -54,6 +54,19 @@ function shakeElement(element) {
   }, { once: true });
 }
 
+function formatCurrency(value) {
+  const amount = Number(value || 0);
+  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function isValidLicenseNumber(value) {
+  return /^[A-Za-z0-9-]{6,15}$/.test(value);
+}
+
+function isValidContactNumber(value) {
+  return /^[0-9]{10}$/.test(value);
+}
+
 // Toggle between Login and Register views
 linkToRegister.addEventListener('click', (e) => {
   e.preventDefault();
@@ -201,7 +214,7 @@ btnLogout.addEventListener('click', () => {
 // Full RBAC Permission Map
 const ROLE_PERMISSIONS = {
   'Fleet Manager': {
-    tabs: ['dashboard', 'vehicles', 'drivers', 'trips', 'maintenance', 'expenses', 'reports'],
+    tabs: ['dashboard', 'vehicles', 'drivers', 'trips', 'maintenance', 'expenses', 'reports', 'settings'],
     canAddVehicle: true,
     canEditVehicle: true,
     canDeleteVehicle: true,
@@ -433,7 +446,8 @@ function switchTab(tabName) {
     trips: { title: 'Trips & Dispatch', desc: 'Assign vehicles and drivers to delivery routes' },
     maintenance: { title: 'Maintenance Logs', desc: 'Track inspections, diagnostics, and repairs' },
     expenses: { title: 'Fuel & Expenses', desc: 'Log operational parameters, toll taxes, and costs' },
-    reports: { title: 'Reports & Analytics', desc: 'Financial cost summaries, fuel efficiency, and ROI metrics' }
+    reports: { title: 'Reports & Analytics', desc: 'Financial cost summaries, fuel efficiency, and ROI metrics' },
+    settings: { title: 'Application Settings', desc: 'Configure depot defaults and role access controls' }
   };
 
   const headerInfo = titles[tabName] || { title: 'TransitOps', desc: 'Smart Transport Operations Platform' };
@@ -467,7 +481,37 @@ function loadTabData(tabName) {
     case 'reports':
       fetchReports();
       break;
+    case 'settings':
+      loadSettings();
+      break;
   }
+}
+
+// =================---------------- SETTINGS LOADERS ----------------=================
+
+function loadSettings() {
+  const savedSettings = JSON.parse(localStorage.getItem('transitops_settings') || '{}');
+  document.getElementById('setting-depot-name').value = savedSettings.depotName || 'Gandhinagar Depot GJT4';
+  document.getElementById('setting-currency').value = savedSettings.currency || 'INR (Rs)';
+  document.getElementById('setting-distance-unit').value = savedSettings.distanceUnit || 'Kilometers';
+}
+
+function saveSettings() {
+  const settings = {
+    depotName: document.getElementById('setting-depot-name').value.trim(),
+    currency: document.getElementById('setting-currency').value.trim(),
+    distanceUnit: document.getElementById('setting-distance-unit').value.trim()
+  };
+  localStorage.setItem('transitops_settings', JSON.stringify(settings));
+  showNotification('Settings saved successfully.', 'success');
+}
+
+const saveSettingsButton = document.getElementById('btn-save-settings');
+if (saveSettingsButton) {
+  saveSettingsButton.addEventListener('click', (e) => {
+    e.preventDefault();
+    saveSettings();
+  });
 }
 
 // =================---------------- DASHBOARD LOADERS ----------------=================
@@ -620,26 +664,35 @@ function updateFleetChart(available, active, inShop) {
   const canvas = document.getElementById('chart-fleet-composition');
   const placeholder = document.getElementById('chart-placeholder-message');
   const total = available + active + inShop;
+  const hasData = total > 0;
 
-  // If no data, show placeholder, hide canvas
-  if (total === 0) {
-    canvas.style.display = 'none';
-    if (placeholder) placeholder.style.display = 'flex';
-    if (fleetChart) {
-      fleetChart.destroy();
-      fleetChart = null;
+  // Keep the canvas visible even when filters return no matching data.
+  canvas.style.display = 'block';
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  if (placeholder) {
+    placeholder.style.display = hasData ? 'none' : 'flex';
+    if (!hasData) {
+      placeholder.innerHTML = `
+        <i class="bx bx-info-circle" style="font-size: 28px; color: var(--color-primary-glow);"></i>
+        <span>No matching fleet data for the selected filters.</span>
+      `;
     }
-    return;
   }
 
-  // Data found — show canvas, hide placeholder
-  canvas.style.display = 'block';
-  if (placeholder) placeholder.style.display = 'none';
+  // Ensure the canvas has layout dimensions before building the chart
+  if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) {
+    console.warn('Fleet chart container has zero dimensions; chart may not render properly.');
+  }
 
   // Theme-aware colors matched to the glassmorphic card background
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   const textColor    = isLight ? '#0f172a' : '#e2e8f0';
   const tooltipBg    = isLight ? 'rgba(255,255,255,0.95)' : 'rgba(13,17,30,0.95)';
+  const chartValues = hasData ? [available, active, inShop] : [1];
+  const chartLabels = hasData ? ['Available', 'On Trip', 'In Shop'] : ['No Data'];
+  const chartColors = hasData ? ['#10b981', '#8b5cf6', '#f59e0b'] : ['#94a3b8'];
+  const chartHoverColors = hasData ? ['#059669', '#7c3aed', '#d97706'] : ['#64748b'];
   const tooltipBorder= isLight ? 'rgba(15,23,42,0.08)'   : 'rgba(99,102,241,0.25)';
   const tooltipText  = isLight ? '#0f172a' : '#f8fafc';
   // Match exactly the card background from CSS variables
@@ -689,15 +742,23 @@ function updateFleetChart(available, active, inShop) {
   };
 
   const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    console.error('Unable to get 2D context for fleet chart canvas');
+    return;
+  }
+  if (typeof Chart === 'undefined') {
+    console.error('Chart.js is not loaded. Confirm the CDN script is available.');
+    return;
+  }
   fleetChart = new Chart(ctx, {
     type: 'doughnut',
     plugins: [bgColorPlugin, centerLabelPlugin],
     data: {
-      labels: ['Available', 'On Trip', 'In Shop'],
+      labels: chartLabels,
       datasets: [{
-        data: [available, active, inShop],
-        backgroundColor: ['#10b981', '#8b5cf6', '#f59e0b'],
-        hoverBackgroundColor: ['#059669', '#7c3aed', '#d97706'],
+        data: chartValues,
+        backgroundColor: chartColors,
+        hoverBackgroundColor: chartHoverColors,
         borderWidth: 0,
         borderRadius: 6,
         spacing: 3
@@ -715,6 +776,7 @@ function updateFleetChart(available, active, inShop) {
       plugins: {
         legend: {
           position: 'bottom',
+          align: 'center',
           labels: {
             // Force high-contrast readable colors regardless of theme
             color: isLight ? '#1e293b' : '#f1f5f9',
@@ -728,7 +790,7 @@ function updateFleetChart(available, active, inShop) {
               const ds = chart.data.datasets[0];
               return chart.data.labels.map((label, i) => {
                 const val = ds.data[i] || 0;
-                const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                const pct = hasData ? Math.round((val / total) * 100) : 100;
                 const meta = chart.getDatasetMeta(0);
                 return {
                   text: `${label}  ${pct}%`,
@@ -763,7 +825,7 @@ function updateFleetChart(available, active, inShop) {
             },
             label(context) {
               const val = context.parsed || 0;
-              const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+              const pct = hasData ? Math.round((val / total) * 100) : 100;
               return `  ${val} vehicles  (${pct}%)`;
             }
           }
@@ -916,7 +978,7 @@ function renderVehicles() {
         <td>${v.type}</td>
         <td>${v.max_load_capacity} kg</td>
         <td>${v.odometer} km</td>
-        <td>$${v.acquisition_cost}</td>
+        <td>${formatCurrency(v.acquisition_cost)}</td>
         <td>${v.region}</td>
         <td><span class="badge ${statusClass}">${v.status}</span></td>
         ${actionHtml}
@@ -1024,6 +1086,11 @@ function renderDrivers() {
   const tbody = document.getElementById('tbody-drivers');
   const searchVal = document.getElementById('search-drivers').value.toLowerCase();
   
+  const todayStr = new Date().toISOString().split('T')[0];
+  const soonThreshold = new Date();
+  soonThreshold.setDate(soonThreshold.getDate() + 30);
+  const soonStr = soonThreshold.toISOString().split('T')[0];
+
   tbody.innerHTML = '';
   
   const filtered = state.drivers.filter(d => 
@@ -1036,6 +1103,13 @@ function renderDrivers() {
     if (d.status === 'On Trip') statusClass = 'badge-info';
     if (d.status === 'Off Duty') statusClass = 'badge-gray';
     if (d.status === 'Suspended') statusClass = 'badge-danger';
+
+    let licenseStatusBadge = '<span class="badge badge-success">Valid</span>';
+    if (d.license_expiry_date < todayStr) {
+      licenseStatusBadge = '<span class="badge badge-danger">Expired</span>';
+    } else if (d.license_expiry_date <= soonStr) {
+      licenseStatusBadge = '<span class="badge badge-warning">Expiring Soon</span>';
+    }
 
     const isAuthorized = state.user.role === 'Fleet Manager' || state.user.role === 'Safety Officer';
     const actionHtml = isAuthorized ? `
@@ -1050,7 +1124,7 @@ function renderDrivers() {
         <td><strong>${d.name}</strong></td>
         <td>${d.license_number}</td>
         <td>${d.license_category}</td>
-        <td>${d.license_expiry_date}</td>
+        <td>${d.license_expiry_date} ${licenseStatusBadge}</td>
         <td>${d.contact_number}</td>
         <td>${d.safety_score}/100</td>
         <td><span class="badge ${statusClass}">${d.status}</span></td>
@@ -1094,15 +1168,36 @@ function openDriverModal(id) {
 formDriver.addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = document.getElementById('driver-id').value;
+  const licenseValue = document.getElementById('driver-license').value.trim();
+  const contactRaw = document.getElementById('driver-contact').value.trim();
+  const contactDigits = contactRaw.replace(/\D/g, '');
   const payload = {
     name: document.getElementById('driver-name').value.trim(),
-    license_number: document.getElementById('driver-license').value.trim(),
+    license_number: licenseValue,
     license_category: document.getElementById('driver-category').value,
     license_expiry_date: document.getElementById('driver-expiry').value,
-    contact_number: document.getElementById('driver-contact').value.trim(),
+    contact_number: contactDigits,
     safety_score: parseInt(document.getElementById('driver-safety').value || 100),
     status: id ? document.getElementById('driver-status').value : undefined
   };
+
+  if (!payload.name || !payload.license_number || !payload.license_category || !payload.license_expiry_date || !payload.contact_number) {
+    shakeElement(formDriver);
+    showNotification('Please fill all required driver fields.', 'danger');
+    return;
+  }
+
+  if (!isValidLicenseNumber(payload.license_number)) {
+    shakeElement(formDriver);
+    showNotification('License number must be 6-15 characters and contain only letters, numbers, or dashes.', 'danger');
+    return;
+  }
+
+  if (!isValidContactNumber(payload.contact_number)) {
+    shakeElement(formDriver);
+    showNotification('Contact number must be exactly 10 digits.', 'danger');
+    return;
+  }
 
   try {
     const url = id ? `${API_BASE}/drivers/${id}` : `${API_BASE}/drivers`;
@@ -1183,7 +1278,7 @@ function renderTrips() {
         <td>${t.driver_name}</td>
         <td>${t.cargo_weight} kg</td>
         <td>${t.planned_distance} km</td>
-        <td>$${t.revenue}</td>
+        <td>${formatCurrency(t.revenue)}</td>
         <td><span class="badge ${statusClass}">${t.status}</span></td>
         <td>${actionBtn}</td>
       </tr>
@@ -1390,7 +1485,7 @@ function renderMaintenanceLogs() {
         <td>${log.description}</td>
         <td>${log.start_date}</td>
         <td>${log.end_date || '<i>Under repair...</i>'}</td>
-        <td>$${log.cost}</td>
+        <td>${formatCurrency(log.cost)}</td>
         <td><span class="badge ${badgeClass}">${log.status}</span></td>
         <td>${closeBtn}</td>
       </tr>
@@ -1450,9 +1545,9 @@ formMaint.addEventListener('submit', async (e) => {
 });
 
 async function closeMaintenance(id) {
-  const finalCostStr = prompt('Enter final service cost ($):', '150');
+  const finalCostStr = prompt('Enter final service cost (₹):', '150');
   if (finalCostStr === null) return; // Cancelled prompt
-  const finalCost = parseFloat(finalCostStr || 0);
+  const finalCost = parseFloat(finalCostStr.replace(/[^0-9.]/g, '') || 0);
 
   try {
     const res = await authFetch(`${API_BASE}/maintenance/${id}/close`, {
@@ -1491,7 +1586,7 @@ function renderExpenses() {
         <td><strong>${f.vehicle_name} (${f.vehicle_reg})</strong></td>
         <td>${f.date}</td>
         <td>${f.liters} L</td>
-        <td>$${f.cost}</td>
+        <td>${formatCurrency(f.cost)}</td>
       </tr>
     `;
   });
@@ -1503,7 +1598,7 @@ function renderExpenses() {
       <tr>
         <td><strong>${e.vehicle_name} (${e.vehicle_reg})</strong></td>
         <td><span class="badge badge-warning">${e.type}</span></td>
-        <td>$${e.cost}</td>
+        <td>${formatCurrency(e.cost)}</td>
         <td>${e.date}</td>
         <td>${e.description}</td>
       </tr>
@@ -1612,10 +1707,10 @@ function renderReports() {
         <td>${r.type}</td>
         <td>${dist} km</td>
         <td>${fuelL} L</td>
-        <td>$${fuelCost}</td>
-        <td>$${maintCost}</td>
-        <td>$${opCost}</td>
-        <td>$${revenue}</td>
+        <td>${formatCurrency(fuelCost)}</td>
+        <td>${formatCurrency(maintCost)}</td>
+        <td>${formatCurrency(opCost)}</td>
+        <td>${formatCurrency(revenue)}</td>
         <td>${fuelEff > 0 ? fuelEff + ' km/L' : '<span style="color:var(--text-muted)">N/A</span>'}</td>
         <td><span class="badge ${roiClass}">${roiPct}%</span></td>
       </tr>
@@ -1705,7 +1800,7 @@ document.getElementById('btn-pdf-export').addEventListener('click', () => {
   // Table
   doc.autoTable({
     startY: 32,
-    head: [['Vehicle', 'Type', 'Distance (km)', 'Fuel (L)', 'Fuel Cost ($)', 'Maint Cost ($)', 'Op Cost ($)', 'Revenue ($)', 'Fuel Eff (km/L)', 'ROI (%)']],
+    head: [['Vehicle', 'Type', 'Distance (km)', 'Fuel (L)', 'Fuel Cost (₹)', 'Maint Cost (₹)', 'Op Cost (₹)', 'Revenue (₹)', 'Fuel Eff (km/L)', 'ROI (%)']],
     body: state.reports.map(r => [
       `${r.name_model}\n${r.registration_number}`,
       r.type,
