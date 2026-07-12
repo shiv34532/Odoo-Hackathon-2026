@@ -82,4 +82,3 @@ For easy testing, you can use these default accounts (or click any of the **Quic
 * **Shaking Form Validation**: Modals and input forms physically shake (`shakeAlert`) to highlight empty fields or API errors.
 * **Active Click Scales**: All button elements scale down slightly on tap (`transform: scale(0.97)`) for haptic confirmation.
 * **Sun/Moon Theme Toggles**: Clean icon transition animations that switch themes and redraw charts immediately.
-
