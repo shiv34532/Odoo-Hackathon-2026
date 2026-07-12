@@ -556,10 +556,19 @@ function renderVehicles() {
       </td>
     ` : '';
 
+    let iconSrc = 'assets/van.png';
+    if (v.type === 'Truck') iconSrc = 'assets/truck.png';
+    if (v.type === 'Sedan') iconSrc = 'assets/sedan.png';
+
     tbody.innerHTML += `
       <tr>
         <td><strong>${v.registration_number}</strong></td>
-        <td>${v.name_model}</td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <img src="${iconSrc}" style="width:28px; height:28px; border-radius:4px; object-fit:cover; background:rgba(255,255,255,0.03);" alt="${v.type}">
+            <span>${v.name_model}</span>
+          </div>
+        </td>
         <td>${v.type}</td>
         <td>${v.max_load_capacity} kg</td>
         <td>${v.odometer} km</td>
@@ -1222,9 +1231,18 @@ function renderReports() {
     let roiClass = 'badge-success';
     if (parseFloat(r.roi) < 0) roiClass = 'badge-danger';
     
+    let iconSrc = 'assets/van.png';
+    if (r.type === 'Truck') iconSrc = 'assets/truck.png';
+    if (r.type === 'Sedan') iconSrc = 'assets/sedan.png';
+
     tbody.innerHTML += `
       <tr>
-        <td><strong>${r.name_model} (${r.registration_number})</strong></td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <img src="${iconSrc}" style="width:28px; height:28px; border-radius:4px; object-fit:cover; background:rgba(255,255,255,0.03);" alt="${r.type}">
+            <strong>${r.name_model} (${r.registration_number})</strong>
+          </div>
+        </td>
         <td>${r.type}</td>
         <td>${r.totalDistance} km</td>
         <td>${r.totalFuelLiters} L</td>
