@@ -499,89 +499,144 @@ function updateFleetChart(available, active, inShop) {
   const placeholder = document.getElementById('chart-placeholder-message');
   const total = available + active + inShop;
 
+  // If no data, show placeholder, hide canvas
   if (total === 0) {
-    canvas.classList.add('hidden');
-    if (placeholder) placeholder.classList.remove('hidden');
+    canvas.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'flex';
     if (fleetChart) {
       fleetChart.destroy();
       fleetChart = null;
     }
     return;
-  } else {
-    canvas.classList.remove('hidden');
-    if (placeholder) placeholder.classList.add('hidden');
   }
 
-  const ctx = canvas.getContext('2d');
-  
-  // Theme check
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  const textColor = isLight ? '#0f172a' : '#f9fafb';
+  // Data found — show canvas, hide placeholder
+  canvas.style.display = 'block';
+  if (placeholder) placeholder.style.display = 'none';
 
+  // Theme-aware colors matched to the glassmorphic card background
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const textColor    = isLight ? '#0f172a' : '#e2e8f0';
+  const tooltipBg    = isLight ? 'rgba(255,255,255,0.95)' : 'rgba(13,17,30,0.95)';
+  const tooltipBorder= isLight ? 'rgba(15,23,42,0.08)'   : 'rgba(99,102,241,0.25)';
+  const tooltipText  = isLight ? '#0f172a' : '#f8fafc';
+  // Match exactly the card background from CSS variables
+  const chartBg      = isLight
+    ? 'rgba(255, 255, 255, 0.0)'   // transparent — card handles bg in light mode
+    : 'rgba(13, 17, 30, 0.0)';     // transparent — card handles bg in dark mode
+
+  // Destroy previous instance cleanly to prevent glitch/flicker
   if (fleetChart) {
     fleetChart.destroy();
+    fleetChart = null;
   }
 
+  // Custom background-color plugin to paint chart canvas bg matching card
+  const bgColorPlugin = {
+    id: 'chartBgColor',
+    beforeDraw(chart) {
+      const { ctx: c, chartArea } = chart;
+      if (!chartArea) return;
+      c.save();
+      c.globalCompositeOperation = 'destination-over';
+      c.fillStyle = chartBg;
+      c.fillRect(0, 0, chart.width, chart.height);
+      c.restore();
+    }
+  };
+
+  // Center label plugin — shows total vehicles count in the donut hole
+  const centerLabelPlugin = {
+    id: 'centerLabel',
+    afterDraw(chart) {
+      const { ctx: c, chartArea } = chart;
+      if (!chartArea) return;
+      const cx = (chartArea.left + chartArea.right) / 2;
+      const cy = (chartArea.top + chartArea.bottom) / 2;
+      c.save();
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillStyle = textColor;
+      c.font = `700 26px Outfit, sans-serif`;
+      c.fillText(total, cx, cy - 10);
+      c.font = `400 11px Plus Jakarta Sans, sans-serif`;
+      c.fillStyle = isLight ? '#64748b' : '#94a3b8';
+      c.fillText('Total Vehicles', cx, cy + 12);
+      c.restore();
+    }
+  };
+
+  const ctx = canvas.getContext('2d');
   fleetChart = new Chart(ctx, {
     type: 'doughnut',
+    plugins: [bgColorPlugin, centerLabelPlugin],
     data: {
       labels: ['Available', 'On Trip', 'In Shop'],
       datasets: [{
         data: [available, active, inShop],
-        backgroundColor: [
-          '#10b981', // Emerald Success
-          '#8b5cf6', // Violet Purple
-          '#f59e0b'  // Amber Warning
-        ],
-        borderWidth: isLight ? 1 : 0,
-        borderColor: isLight ? '#cbd5e1' : 'transparent',
+        backgroundColor: ['#10b981', '#8b5cf6', '#f59e0b'],
+        hoverBackgroundColor: ['#059669', '#7c3aed', '#d97706'],
+        borderWidth: 0,
         borderRadius: 6,
-        spacing: 4
+        spacing: 3
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: {
+        animateScale: true,
+        animateRotate: true,
+        duration: 600,
+        easing: 'easeInOutQuart'
+      },
       plugins: {
         legend: {
           position: 'bottom',
           labels: {
             color: textColor,
-            font: { family: 'Inter', size: 12, weight: '500' },
-            padding: 15,
-            generateLabels: function(chart) {
-              const data = chart.data;
-              if (data.labels.length && data.datasets.length) {
-                const dataset = data.datasets[0];
-                return data.labels.map((label, i) => {
-                  const value = dataset.data[i];
-                  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-                  return {
-                    text: `${label} (${pct}%)`,
-                    fillStyle: dataset.backgroundColor[i],
-                    strokeStyle: dataset.borderColor ? dataset.borderColor[i] : 'transparent',
-                    lineWidth: dataset.borderWidth,
-                    hidden: isNaN(dataset.data[i]) || chart.getDatasetMeta(0).data[i].hidden,
-                    index: i
-                  };
-                });
-              }
-              return [];
+            font: { family: 'Plus Jakarta Sans', size: 12, weight: '500' },
+            padding: 18,
+            boxWidth: 12,
+            boxHeight: 12,
+            borderRadius: 4,
+            useBorderRadius: true,
+            generateLabels(chart) {
+              const ds = chart.data.datasets[0];
+              return chart.data.labels.map((label, i) => {
+                const val = ds.data[i] || 0;
+                const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                const meta = chart.getDatasetMeta(0);
+                return {
+                  text: `${label}  ${pct}%`,
+                  fillStyle: ds.backgroundColor[i],
+                  strokeStyle: 'transparent',
+                  lineWidth: 0,
+                  hidden: meta.data[i] ? meta.data[i].hidden : false,
+                  index: i
+                };
+              });
             }
           }
         },
         tooltip: {
+          backgroundColor: tooltipBg,
+          borderColor: tooltipBorder,
+          borderWidth: 1,
+          titleColor: tooltipText,
+          bodyColor: tooltipText,
+          padding: 12,
+          cornerRadius: 10,
           callbacks: {
-            label: function(context) {
-              const label = context.label || '';
-              const value = context.parsed || 0;
-              const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-              return ` ${label}: ${value} vehicles (${pct}%)`;
+            label(context) {
+              const val = context.parsed || 0;
+              const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+              return `  ${context.label}: ${val} vehicles — ${pct}%`;
             }
           }
         }
       },
-      cutout: '72%'
+      cutout: '70%'
     }
   });
 }

@@ -660,8 +660,14 @@ tr:hover td {
 .chart-container {
   position: relative;
   width: 100%;
-  height: 270px;
+  height: 280px;
   margin-top: 16px;
+  /* Prevent Chart.js infinite resize loop */
+  overflow: hidden;
+}
+
+.chart-container canvas {
+  background: transparent !important;
 }
 
 .alerts-list {
