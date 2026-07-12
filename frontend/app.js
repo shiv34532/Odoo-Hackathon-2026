@@ -1,0 +1,1120 @@
+// ==========================================================================
+// TRANSITOPS FRONTEND CONTROLLER (VANILLA JS SPA)
+// ==========================================================================
+
+const API_BASE = '/api';
+
+// Application State
+const state = {
+  token: localStorage.getItem('transitops_token') || null,
+  user: JSON.parse(localStorage.getItem('transitops_user')) || null,
+  activeTab: 'dashboard',
+  vehicles: [],
+  drivers: [],
+  trips: [],
+  maintenance: [],
+  expenses: { fuelLogs: [], generalExpenses: [] },
+  reports: []
+};
+
+// =================---------------- AUTHENTICATION & LOGIN ----------------=================
+
+const loginContainer = document.getElementById('login-container');
+const appContainer = document.getElementById('app-container');
+const loginForm = document.getElementById('login-form');
+const loginEmail = document.getElementById('login-email');
+const loginPassword = document.getElementById('login-password');
+const loginErrorAlert = document.getElementById('login-error-alert');
+const btnLogout = document.getElementById('btn-logout');
+
+// Check Login on Launch
+function checkAuth() {
+  if (state.token && state.user) {
+    loginContainer.classList.add('hidden');
+    appContainer.classList.remove('hidden');
+    updateUserUI();
+    switchTab(state.activeTab);
+  } else {
+    loginContainer.classList.remove('hidden');
+    appContainer.classList.add('hidden');
+  }
+}
+
+// Handle Login Form Submit
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  loginErrorAlert.classList.add('hidden');
+
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+
+  try {
+    const res = await fetch(`${API_BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+
+    // Save state
+    state.token = data.token;
+    state.user = data.user;
+    localStorage.setItem('transitops_token', data.token);
+    localStorage.setItem('transitops_user', JSON.stringify(data.user));
+
+    loginContainer.classList.add('hidden');
+    appContainer.classList.remove('hidden');
+    
+    updateUserUI();
+    showNotification('Logged in successfully', 'success');
+    switchTab('dashboard');
+  } catch (err) {
+    loginErrorAlert.textContent = err.message;
+    loginErrorAlert.classList.remove('hidden');
+  }
+});
+
+// Handle Logout
+btnLogout.addEventListener('click', () => {
+  state.token = null;
+  state.user = null;
+  localStorage.removeItem('transitops_token');
+  localStorage.removeItem('transitops_user');
+  checkAuth();
+  showNotification('Logged out successfully', 'success');
+});
+
+// Update Header/Sidebar with logged-in user profile
+function updateUserUI() {
+  if (!state.user) return;
+  document.getElementById('user-display-name').textContent = state.user.name;
+  document.getElementById('user-display-role').textContent = state.user.role;
+  document.getElementById('user-avatar-initial').textContent = state.user.name.charAt(0);
+
+  // Enforce RBAC CSS visibility controls
+  const role = state.user.role;
+  
+  // Reset all elements
+  document.querySelectorAll('.rbac-manager-only').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.rbac-safety-manager-only').forEach(el => el.classList.add('hidden'));
+
+  // Grant role access
+  if (role === 'Fleet Manager') {
+    document.querySelectorAll('.rbac-manager-only').forEach(el => el.classList.remove('hidden'));
+    document.querySelectorAll('.rbac-safety-manager-only').forEach(el => el.classList.remove('hidden'));
+  } else if (role === 'Safety Officer') {
+    document.querySelectorAll('.rbac-safety-manager-only').forEach(el => el.classList.remove('hidden'));
+  }
+  
+  // Custom navigation permissions view styling
+  const navVehicles = document.getElementById('nav-vehicles');
+  const navDrivers = document.getElementById('nav-drivers');
+  const navMaintenance = document.getElementById('nav-maintenance');
+  const navExpenses = document.getElementById('nav-expenses');
+  const navReports = document.getElementById('nav-reports');
+
+  // Reset navigation visibility
+  [navVehicles, navDrivers, navMaintenance, navExpenses, navReports].forEach(nav => nav.classList.remove('hidden'));
+
+  if (role === 'Driver') {
+    navMaintenance.classList.add('hidden');
+    navReports.classList.add('hidden');
+  } else if (role === 'Safety Officer') {
+    navExpenses.classList.add('hidden');
+    navReports.classList.add('hidden');
+  } else if (role === 'Financial Analyst') {
+    navMaintenance.classList.add('hidden');
+  }
+}
+
+// Authenticated Fetch Helper
+async function authFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  options.headers['Authorization'] = `Bearer ${state.token}`;
+  
+  const res = await fetch(url, options);
+  if (res.status === 401 || res.status === 403) {
+    // Session expired or unauthorized
+    state.token = null;
+    state.user = null;
+    localStorage.removeItem('transitops_token');
+    localStorage.removeItem('transitops_user');
+    checkAuth();
+    throw new Error('Session expired or access forbidden');
+  }
+  return res;
+}
+
+// Global Notification Banners
+function showNotification(message, type = 'success') {
+  const alertEl = document.getElementById('global-alert');
+  alertEl.textContent = message;
+  alertEl.className = `alert alert-${type === 'success' ? 'success' : 'danger'}`;
+  
+  setTimeout(() => {
+    alertEl.classList.add('hidden');
+  }, 4000);
+}
+
+// =================---------------- TAB ROUTING NAVIGATION ----------------=================
+
+const navItems = document.querySelectorAll('.nav-item');
+const tabPanes = document.querySelectorAll('.tab-pane');
+
+navItems.forEach(item => {
+  item.addEventListener('click', (e) => {
+    e.preventDefault();
+    const tabName = item.getAttribute('data-tab');
+    switchTab(tabName);
+  });
+});
+
+function switchTab(tabName) {
+  state.activeTab = tabName;
+  
+  // Set active nav link
+  navItems.forEach(nav => {
+    if (nav.getAttribute('data-tab') === tabName) {
+      nav.classList.add('active');
+    } else {
+      nav.classList.remove('active');
+    }
+  });
+
+  // Switch visible panels
+  tabPanes.forEach(pane => {
+    if (pane.id === `tab-${tabName}`) {
+      pane.classList.remove('hidden');
+    } else {
+      pane.classList.add('hidden');
+    }
+  });
+
+  // Dynamic header titles
+  const titles = {
+    dashboard: { title: 'Dashboard', desc: 'Real-time fleet utilization & key performance parameters' },
+    vehicles: { title: 'Vehicle Registry', desc: 'Manage registered vehicles and monitor status logs' },
+    drivers: { title: 'Driver Management', desc: 'Track driver qualifications, safety scores, and compliance' },
+    trips: { title: 'Trips & Dispatch', desc: 'Assign vehicles and drivers to delivery routes' },
+    maintenance: { title: 'Maintenance Logs', desc: 'Track inspections, diagnostics, and repairs' },
+    expenses: { title: 'Fuel & Expenses', desc: 'Log operational parameters, toll taxes, and costs' },
+    reports: { title: 'Reports & Analytics', desc: 'Financial cost summaries, fuel efficiency, and ROI metrics' }
+  };
+
+  const headerInfo = titles[tabName] || { title: 'TransitOps', desc: 'Smart Transport Operations Platform' };
+  document.getElementById('page-title').textContent = headerInfo.title;
+  document.getElementById('page-description').textContent = headerInfo.desc;
+
+  // Load Tab Specific Data
+  loadTabData(tabName);
+}
+
+function loadTabData(tabName) {
+  switch (tabName) {
+    case 'dashboard':
+      fetchDashboardStats();
+      break;
+    case 'vehicles':
+      fetchVehicles();
+      break;
+    case 'drivers':
+      fetchDrivers();
+      break;
+    case 'trips':
+      fetchTrips();
+      break;
+    case 'maintenance':
+      fetchMaintenanceLogs();
+      break;
+    case 'expenses':
+      fetchExpenses();
+      break;
+    case 'reports':
+      fetchReports();
+      break;
+  }
+}
+
+// =================---------------- DASHBOARD LOADERS ----------------=================
+
+async function fetchDashboardStats() {
+  try {
+    // Set query params if filters exist
+    const type = document.getElementById('filter-vehicle-type').value;
+    const region = document.getElementById('filter-vehicle-region').value;
+    
+    let url = `${API_BASE}/reports/overview`;
+    const res = await authFetch(url);
+    const data = await res.json();
+
+    document.getElementById('kpi-active-vehicles').textContent = data.activeVehicles;
+    document.getElementById('kpi-available-vehicles').textContent = data.availableVehicles;
+    document.getElementById('kpi-in-shop-vehicles').textContent = data.maintenanceVehicles;
+    document.getElementById('kpi-active-trips').textContent = data.activeTrips;
+    document.getElementById('kpi-pending-trips').textContent = data.pendingTrips;
+    document.getElementById('kpi-drivers-on-duty').textContent = data.driversOnDuty;
+    document.getElementById('kpi-utilization-pct').textContent = `${data.fleetUtilization}%`;
+
+    // Visual Composition bar
+    const total = data.activeVehicles + data.availableVehicles + data.maintenanceVehicles;
+    if (total > 0) {
+      document.getElementById('bar-comp-available').style.width = `${(data.availableVehicles / total) * 100}%`;
+      document.getElementById('bar-comp-ontrip').style.width = `${(data.activeVehicles / total) * 100}%`;
+      document.getElementById('bar-comp-inshop').style.width = `${(data.maintenanceVehicles / total) * 100}%`;
+    }
+
+    // Load safety alerts (e.g. low safety scores, expired/expiring licenses)
+    loadSafetyAlerts();
+  } catch (err) {
+    console.error('Error loading dashboard stats:', err);
+  }
+}
+
+// Apply Filters
+document.getElementById('btn-apply-filters').addEventListener('click', () => {
+  fetchDashboardStats();
+});
+
+async function loadSafetyAlerts() {
+  try {
+    const resDrivers = await authFetch(`${API_BASE}/drivers`);
+    const drivers = await resDrivers.json();
+    
+    const resVehicles = await authFetch(`${API_BASE}/vehicles`);
+    const vehicles = await resVehicles.json();
+
+    const alertsBox = document.getElementById('dashboard-safety-alerts');
+    alertsBox.innerHTML = '';
+
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+    const todayStr = today.toISOString().split('T')[0];
+    const thirtyDaysStr = thirtyDaysFromNow.toISOString().split('T')[0];
+
+    let alertCount = 0;
+
+    // Check Driver Licenses Expiry
+    drivers.forEach(d => {
+      if (d.license_expiry_date < todayStr) {
+        alertCount++;
+        alertsBox.innerHTML += `
+          <div class="alert-item danger">
+            <i class="bx bx-error alert-item-icon"></i>
+            <div class="alert-item-text">Driver <strong>${d.name}</strong>'s license is EXPIRED (Expiry: ${d.license_expiry_date}).</div>
+          </div>
+        `;
+      } else if (d.license_expiry_date <= thirtyDaysStr) {
+        alertCount++;
+        alertsBox.innerHTML += `
+          <div class="alert-item warning">
+            <i class="bx bx-time-five alert-item-icon"></i>
+            <div class="alert-item-text">Driver <strong>${d.name}</strong>'s license expires soon (Expiry: ${d.license_expiry_date}).</div>
+          </div>
+        `;
+      }
+
+      if (d.safety_score < 70) {
+        alertCount++;
+        alertsBox.innerHTML += `
+          <div class="alert-item warning">
+            <i class="bx bx-shield-quarter alert-item-icon"></i>
+            <div class="alert-item-text">Driver <strong>${d.name}</strong> has a low safety score (${d.safety_score}/100).</div>
+          </div>
+        `;
+      }
+    });
+
+    // Check Vehicle Odometers for Maintenance Warning (e.g. over 50,000 km or multiples)
+    vehicles.forEach(v => {
+      if (v.odometer >= 50000 && v.status === 'Available') {
+        alertCount++;
+        alertsBox.innerHTML += `
+          <div class="alert-item warning">
+            <i class="bx bx-wrench alert-item-icon"></i>
+            <div class="alert-item-text">Vehicle <strong>${v.registration_number}</strong> (${v.name_model}) odometer exceeds 50k km. Schedule maintenance soon.</div>
+          </div>
+        `;
+      }
+    });
+
+    if (alertCount === 0) {
+      alertsBox.innerHTML = '<div class="alert-item-text">No active safety warnings. Operations are fully compliant!</div>';
+    }
+  } catch (err) {
+    console.error('Error listing safety alerts:', err);
+  }
+}
+
+// =================---------------- VEHICLES MODULE ----------------=================
+
+async function fetchVehicles() {
+  try {
+    const res = await authFetch(`${API_BASE}/vehicles`);
+    state.vehicles = await res.json();
+    renderVehicles();
+  } catch (err) {
+    showNotification('Error loading vehicles: ' + err.message, 'danger');
+  }
+}
+
+function renderVehicles() {
+  const tbody = document.getElementById('tbody-vehicles');
+  const searchVal = document.getElementById('search-vehicles').value.toLowerCase();
+  
+  tbody.innerHTML = '';
+  
+  const filtered = state.vehicles.filter(v => 
+    v.name_model.toLowerCase().includes(searchVal) || 
+    v.registration_number.toLowerCase().includes(searchVal)
+  );
+
+  filtered.forEach(v => {
+    let statusClass = 'badge-success';
+    if (v.status === 'On Trip') statusClass = 'badge-info';
+    if (v.status === 'In Shop') statusClass = 'badge-warning';
+    if (v.status === 'Retired') statusClass = 'badge-danger';
+
+    const actionHtml = state.user.role === 'Fleet Manager' ? `
+      <td class="row-actions">
+        <a class="btn-row-action edit" onclick="openVehicleModal(${v.id})" title="Edit"><i class="bx bx-edit-alt"></i></a>
+        <a class="btn-row-action delete" onclick="deleteVehicle(${v.id})" title="Delete"><i class="bx bx-trash"></i></a>
+      </td>
+    ` : '';
+
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${v.registration_number}</strong></td>
+        <td>${v.name_model}</td>
+        <td>${v.type}</td>
+        <td>${v.max_load_capacity} kg</td>
+        <td>${v.odometer} km</td>
+        <td>$${v.acquisition_cost}</td>
+        <td>${v.region}</td>
+        <td><span class="badge ${statusClass}">${v.status}</span></td>
+        ${actionHtml}
+      </tr>
+    `;
+  });
+}
+
+document.getElementById('search-vehicles').addEventListener('input', renderVehicles);
+
+// Modal Handling
+const modalVehicle = document.getElementById('modal-vehicle');
+const formVehicle = document.getElementById('form-vehicle');
+
+document.getElementById('btn-add-vehicle').addEventListener('click', () => {
+  formVehicle.reset();
+  document.getElementById('vehicle-id').value = '';
+  document.getElementById('modal-vehicle-title').textContent = 'Add New Vehicle';
+  document.getElementById('vehicle-status-group').classList.add('hidden');
+  modalVehicle.classList.add('show');
+});
+
+async function openVehicleModal(id) {
+  const v = state.vehicles.find(item => item.id === id);
+  if (!v) return;
+
+  document.getElementById('vehicle-id').value = v.id;
+  document.getElementById('vehicle-reg').value = v.registration_number;
+  document.getElementById('vehicle-model').value = v.name_model;
+  document.getElementById('vehicle-type').value = v.type;
+  document.getElementById('vehicle-capacity').value = v.max_load_capacity;
+  document.getElementById('vehicle-odometer').value = v.odometer;
+  document.getElementById('vehicle-cost').value = v.acquisition_cost;
+  document.getElementById('vehicle-region').value = v.region;
+  document.getElementById('vehicle-status').value = v.status;
+
+  document.getElementById('modal-vehicle-title').textContent = 'Edit Vehicle';
+  document.getElementById('vehicle-status-group').classList.remove('hidden');
+  modalVehicle.classList.add('show');
+}
+
+formVehicle.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('vehicle-id').value;
+  const payload = {
+    registration_number: document.getElementById('vehicle-reg').value.trim(),
+    name_model: document.getElementById('vehicle-model').value.trim(),
+    type: document.getElementById('vehicle-type').value,
+    max_load_capacity: parseFloat(document.getElementById('vehicle-capacity').value),
+    odometer: parseFloat(document.getElementById('vehicle-odometer').value || 0),
+    acquisition_cost: parseFloat(document.getElementById('vehicle-cost').value || 0),
+    region: document.getElementById('vehicle-region').value,
+    status: id ? document.getElementById('vehicle-status').value : undefined
+  };
+
+  try {
+    const url = id ? `${API_BASE}/vehicles/${id}` : `${API_BASE}/vehicles`;
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await authFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save vehicle');
+
+    modalVehicle.classList.remove('show');
+    showNotification(`Vehicle ${payload.name_model} saved successfully!`, 'success');
+    fetchVehicles();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+async function deleteVehicle(id) {
+  if (!confirm('Are you sure you want to delete this vehicle?')) return;
+  try {
+    const res = await authFetch(`${API_BASE}/vehicles/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    showNotification('Vehicle deleted successfully.', 'success');
+    fetchVehicles();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+}
+
+// =================---------------- DRIVERS MODULE ----------------=================
+
+async function fetchDrivers() {
+  try {
+    const res = await authFetch(`${API_BASE}/drivers`);
+    state.drivers = await res.json();
+    renderDrivers();
+  } catch (err) {
+    showNotification('Error loading drivers: ' + err.message, 'danger');
+  }
+}
+
+function renderDrivers() {
+  const tbody = document.getElementById('tbody-drivers');
+  const searchVal = document.getElementById('search-drivers').value.toLowerCase();
+  
+  tbody.innerHTML = '';
+  
+  const filtered = state.drivers.filter(d => 
+    d.name.toLowerCase().includes(searchVal) || 
+    d.license_number.toLowerCase().includes(searchVal)
+  );
+
+  filtered.forEach(d => {
+    let statusClass = 'badge-success';
+    if (d.status === 'On Trip') statusClass = 'badge-info';
+    if (d.status === 'Off Duty') statusClass = 'badge-gray';
+    if (d.status === 'Suspended') statusClass = 'badge-danger';
+
+    const isAuthorized = state.user.role === 'Fleet Manager' || state.user.role === 'Safety Officer';
+    const actionHtml = isAuthorized ? `
+      <td class="row-actions">
+        <a class="btn-row-action edit" onclick="openDriverModal(${d.id})" title="Edit"><i class="bx bx-edit-alt"></i></a>
+        <a class="btn-row-action delete" onclick="deleteDriver(${d.id})" title="Delete"><i class="bx bx-trash"></i></a>
+      </td>
+    ` : '';
+
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${d.name}</strong></td>
+        <td>${d.license_number}</td>
+        <td>${d.license_category}</td>
+        <td>${d.license_expiry_date}</td>
+        <td>${d.contact_number}</td>
+        <td>${d.safety_score}/100</td>
+        <td><span class="badge ${statusClass}">${d.status}</span></td>
+        ${actionHtml}
+      </tr>
+    `;
+  });
+}
+
+document.getElementById('search-drivers').addEventListener('input', renderDrivers);
+
+const modalDriver = document.getElementById('modal-driver');
+const formDriver = document.getElementById('form-driver');
+
+document.getElementById('btn-add-driver').addEventListener('click', () => {
+  formDriver.reset();
+  document.getElementById('driver-id').value = '';
+  document.getElementById('modal-driver-title').textContent = 'Add New Driver';
+  document.getElementById('driver-status-group').classList.add('hidden');
+  modalDriver.classList.add('show');
+});
+
+function openDriverModal(id) {
+  const d = state.drivers.find(item => item.id === id);
+  if (!d) return;
+
+  document.getElementById('driver-id').value = d.id;
+  document.getElementById('driver-name').value = d.name;
+  document.getElementById('driver-license').value = d.license_number;
+  document.getElementById('driver-category').value = d.license_category;
+  document.getElementById('driver-expiry').value = d.license_expiry_date;
+  document.getElementById('driver-contact').value = d.contact_number;
+  document.getElementById('driver-safety').value = d.safety_score;
+  document.getElementById('driver-status').value = d.status;
+
+  document.getElementById('modal-driver-title').textContent = 'Edit Driver';
+  document.getElementById('driver-status-group').classList.remove('hidden');
+  modalDriver.classList.add('show');
+}
+
+formDriver.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('driver-id').value;
+  const payload = {
+    name: document.getElementById('driver-name').value.trim(),
+    license_number: document.getElementById('driver-license').value.trim(),
+    license_category: document.getElementById('driver-category').value,
+    license_expiry_date: document.getElementById('driver-expiry').value,
+    contact_number: document.getElementById('driver-contact').value.trim(),
+    safety_score: parseInt(document.getElementById('driver-safety').value || 100),
+    status: id ? document.getElementById('driver-status').value : undefined
+  };
+
+  try {
+    const url = id ? `${API_BASE}/drivers/${id}` : `${API_BASE}/drivers`;
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await authFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save driver');
+
+    modalDriver.classList.remove('show');
+    showNotification(`Driver ${payload.name} saved successfully!`, 'success');
+    fetchDrivers();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+async function deleteDriver(id) {
+  if (!confirm('Are you sure you want to delete this driver?')) return;
+  try {
+    const res = await authFetch(`${API_BASE}/drivers/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    showNotification('Driver deleted successfully.', 'success');
+    fetchDrivers();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+}
+
+// =================---------------- TRIPS & DISPATCH MODULE ----------------=================
+
+async function fetchTrips() {
+  try {
+    const res = await authFetch(`${API_BASE}/trips`);
+    state.trips = await res.json();
+    renderTrips();
+  } catch (err) {
+    showNotification('Error loading trips: ' + err.message, 'danger');
+  }
+}
+
+function renderTrips() {
+  const tbody = document.getElementById('tbody-trips');
+  tbody.innerHTML = '';
+
+  state.trips.forEach(t => {
+    let statusClass = 'badge-gray';
+    if (t.status === 'Dispatched') statusClass = 'badge-info';
+    if (t.status === 'Completed') statusClass = 'badge-success';
+    if (t.status === 'Cancelled') statusClass = 'badge-danger';
+
+    // Action button logic
+    let actionBtn = '';
+    if (t.status === 'Draft') {
+      actionBtn = `<button class="btn btn-primary btn-sm" onclick="dispatchTrip(${t.id})"><i class="bx bx-navigation"></i> Dispatch</button>`;
+    } else if (t.status === 'Dispatched') {
+      actionBtn = `
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-success btn-sm" onclick="openCompleteTripModal(${t.id})"><i class="bx bx-check-double"></i> Complete</button>
+          <button class="btn btn-danger btn-sm" onclick="cancelTrip(${t.id})"><i class="bx bx-x"></i> Cancel</button>
+        </div>
+      `;
+    }
+
+    tbody.innerHTML += `
+      <tr>
+        <td>#${t.id}</td>
+        <td><strong>${t.source} &rarr; ${t.destination}</strong></td>
+        <td>${t.vehicle_name} (${t.vehicle_reg})</td>
+        <td>${t.driver_name}</td>
+        <td>${t.cargo_weight} kg</td>
+        <td>${t.planned_distance} km</td>
+        <td>$${t.revenue}</td>
+        <td><span class="badge ${statusClass}">${t.status}</span></td>
+        <td>${actionBtn}</td>
+      </tr>
+    `;
+  });
+}
+
+// Modal handling for creating trips
+const modalTrip = document.getElementById('modal-trip');
+const formTrip = document.getElementById('form-trip');
+const selectTripVehicle = document.getElementById('trip-vehicle');
+const selectTripDriver = document.getElementById('trip-driver');
+
+document.getElementById('btn-create-trip').addEventListener('click', async () => {
+  formTrip.reset();
+  document.getElementById('trip-vehicle-hint').textContent = '';
+  document.getElementById('trip-driver-hint').textContent = '';
+  
+  // Load available vehicles and drivers in dropdown
+  try {
+    const resVeh = await authFetch(`${API_BASE}/vehicles`);
+    const vehicles = await resVeh.json();
+    selectTripVehicle.innerHTML = '<option value="">-- Choose Available Vehicle --</option>';
+    vehicles.filter(v => v.status === 'Available').forEach(v => {
+      selectTripVehicle.innerHTML += `<option value="${v.id}" data-capacity="${v.max_load_capacity}">
+        ${v.name_model} (${v.registration_number}) - Capacity: ${v.max_load_capacity} kg
+      </option>`;
+    });
+
+    const resDri = await authFetch(`${API_BASE}/drivers`);
+    const drivers = await resDri.json();
+    selectTripDriver.innerHTML = '<option value="">-- Choose Available Driver --</option>';
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    drivers.filter(d => d.status === 'Available' && d.license_expiry_date >= todayStr).forEach(d => {
+      selectTripDriver.innerHTML += `<option value="${d.id}">
+        ${d.name} (${d.license_category}) - Score: ${d.safety_score}
+      </option>`;
+    });
+
+    modalTrip.classList.add('show');
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+// Update capacity hint client side
+selectTripVehicle.addEventListener('change', () => {
+  const selected = selectTripVehicle.options[selectTripVehicle.selectedIndex];
+  const cap = selected.getAttribute('data-capacity');
+  document.getElementById('trip-vehicle-hint').textContent = cap ? `Max Payload: ${cap} kg` : '';
+});
+
+formTrip.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const vehicleId = parseInt(selectTripVehicle.value);
+  const driverId = parseInt(selectTripDriver.value);
+  const cargoWeight = parseFloat(document.getElementById('trip-cargo').value);
+  const plannedDistance = parseFloat(document.getElementById('trip-distance').value);
+  const revenue = parseFloat(document.getElementById('trip-revenue').value);
+
+  // Client side validation of cargo weight limit
+  const selectedVeh = selectTripVehicle.options[selectTripVehicle.selectedIndex];
+  const maxCap = parseFloat(selectedVeh.getAttribute('data-capacity'));
+  if (cargoWeight > maxCap) {
+    showNotification(`Error: Cargo Weight exceeds vehicle's max capacity (${maxCap} kg)`, 'danger');
+    return;
+  }
+
+  const payload = {
+    source: document.getElementById('trip-src').value.trim(),
+    destination: document.getElementById('trip-dest').value.trim(),
+    vehicle_id: vehicleId,
+    driver_id: driverId,
+    cargo_weight: cargoWeight,
+    planned_distance: plannedDistance,
+    revenue: revenue
+  };
+
+  try {
+    const res = await authFetch(`${API_BASE}/trips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    modalTrip.classList.remove('show');
+    showNotification('Draft trip created successfully.', 'success');
+    fetchTrips();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+async function dispatchTrip(id) {
+  try {
+    const res = await authFetch(`${API_BASE}/trips/${id}/dispatch`, { method: 'PUT' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    showNotification(data.message || 'Trip dispatched!', 'success');
+    fetchTrips();
+  } catch (err) {
+    showNotification('Dispatch failed: ' + err.message, 'danger');
+  }
+}
+
+// Complete Trip Modal Handle
+const modalTripComplete = document.getElementById('modal-trip-complete');
+const formTripComplete = document.getElementById('form-trip-complete');
+
+async function openCompleteTripModal(tripId) {
+  formTripComplete.reset();
+  document.getElementById('complete-trip-id').value = tripId;
+
+  // Retrieve current vehicle odometer for the selected trip
+  const trip = state.trips.find(t => t.id === tripId);
+  if (!trip) return;
+
+  try {
+    const res = await authFetch(`${API_BASE}/vehicles`);
+    const vehicles = await res.json();
+    const v = vehicles.find(item => item.id === trip.vehicle_id);
+
+    document.getElementById('complete-odometer-hint').textContent = `Initial odometer reading: ${v.odometer} km.`;
+    document.getElementById('complete-odometer').value = Math.round(v.odometer + trip.planned_distance); // Autofill estimate
+    document.getElementById('complete-odometer').min = v.odometer;
+
+    modalTripComplete.classList.add('show');
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+}
+
+formTripComplete.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('complete-trip-id').value;
+  const payload = {
+    final_odometer: parseFloat(document.getElementById('complete-odometer').value),
+    fuel_liters: parseFloat(document.getElementById('complete-fuel-liters').value || 0),
+    fuel_cost: parseFloat(document.getElementById('complete-fuel-cost').value || 0)
+  };
+
+  try {
+    const res = await authFetch(`${API_BASE}/trips/${id}/complete`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    modalTripComplete.classList.remove('show');
+    showNotification('Trip completed successfully. Resources released.', 'success');
+    fetchTrips();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+async function cancelTrip(id) {
+  if (!confirm('Are you sure you want to cancel this trip?')) return;
+  try {
+    const res = await authFetch(`${API_BASE}/trips/${id}/cancel`, { method: 'PUT' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    showNotification('Trip cancelled.', 'success');
+    fetchTrips();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+}
+
+// =================---------------- MAINTENANCE MODULE ----------------=================
+
+async function fetchMaintenanceLogs() {
+  try {
+    const res = await authFetch(`${API_BASE}/maintenance`);
+    state.maintenance = await res.json();
+    renderMaintenanceLogs();
+  } catch (err) {
+    showNotification('Error loading maintenance logs: ' + err.message, 'danger');
+  }
+}
+
+function renderMaintenanceLogs() {
+  const tbody = document.getElementById('tbody-maintenance');
+  tbody.innerHTML = '';
+
+  state.maintenance.forEach(log => {
+    const badgeClass = log.status === 'Active' ? 'badge-warning' : 'badge-success';
+    const closeBtn = log.status === 'Active' && state.user.role === 'Fleet Manager'
+      ? `<button class="btn btn-secondary btn-sm" onclick="closeMaintenance(${log.id})"><i class="bx bx-check"></i> Close</button>`
+      : '';
+
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${log.vehicle_name} (${log.vehicle_reg})</strong></td>
+        <td>${log.description}</td>
+        <td>${log.start_date}</td>
+        <td>${log.end_date || '<i>Under repair...</i>'}</td>
+        <td>$${log.cost}</td>
+        <td><span class="badge ${badgeClass}">${log.status}</span></td>
+        <td>${closeBtn}</td>
+      </tr>
+    `;
+  });
+}
+
+// Create Maintenance Log Modal
+const modalMaint = document.getElementById('modal-maintenance');
+const formMaint = document.getElementById('form-maintenance');
+const selectMaintVehicle = document.getElementById('maint-vehicle');
+
+document.getElementById('btn-add-maintenance').addEventListener('click', async () => {
+  formMaint.reset();
+  document.getElementById('maint-start').value = new Date().toISOString().split('T')[0];
+
+  try {
+    const res = await authFetch(`${API_BASE}/vehicles`);
+    const vehicles = await res.json();
+    selectMaintVehicle.innerHTML = '<option value="">-- Select Vehicle --</option>';
+    // Only Available vehicles can go to maintenance
+    vehicles.filter(v => v.status === 'Available').forEach(v => {
+      selectMaintVehicle.innerHTML += `<option value="${v.id}">${v.name_model} (${v.registration_number})</option>`;
+    });
+
+    modalMaint.classList.add('show');
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+formMaint.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = {
+    vehicle_id: parseInt(selectMaintVehicle.value),
+    description: document.getElementById('maint-desc').value.trim(),
+    cost: parseFloat(document.getElementById('maint-cost').value || 0),
+    start_date: document.getElementById('maint-start').value,
+    notes: document.getElementById('maint-notes').value.trim()
+  };
+
+  try {
+    const res = await authFetch(`${API_BASE}/maintenance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    modalMaint.classList.remove('show');
+    showNotification('Maintenance log registered. Vehicle status updated to In Shop.', 'success');
+    fetchMaintenanceLogs();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+async function closeMaintenance(id) {
+  const finalCostStr = prompt('Enter final service cost ($):', '150');
+  if (finalCostStr === null) return; // Cancelled prompt
+  const finalCost = parseFloat(finalCostStr || 0);
+
+  try {
+    const res = await authFetch(`${API_BASE}/maintenance/${id}/close`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cost: finalCost })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    showNotification('Service log closed and filed as expense.', 'success');
+    fetchMaintenanceLogs();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+}
+
+// =================---------------- FUEL & EXPENSES MODULE ----------------=================
+
+async function fetchExpenses() {
+  try {
+    const res = await authFetch(`${API_BASE}/expenses`);
+    state.expenses = await res.json();
+    renderExpenses();
+  } catch (err) {
+    showNotification('Error loading expenses: ' + err.message, 'danger');
+  }
+}
+
+function renderExpenses() {
+  const tbodyFuel = document.getElementById('tbody-fuel-logs');
+  tbodyFuel.innerHTML = '';
+  state.expenses.fuelLogs.forEach(f => {
+    tbodyFuel.innerHTML += `
+      <tr>
+        <td><strong>${f.vehicle_name} (${f.vehicle_reg})</strong></td>
+        <td>${f.date}</td>
+        <td>${f.liters} L</td>
+        <td>$${f.cost}</td>
+      </tr>
+    `;
+  });
+
+  const tbodyExp = document.getElementById('tbody-expenses');
+  tbodyExp.innerHTML = '';
+  state.expenses.generalExpenses.forEach(e => {
+    tbodyExp.innerHTML += `
+      <tr>
+        <td><strong>${e.vehicle_name} (${e.vehicle_reg})</strong></td>
+        <td><span class="badge badge-warning">${e.type}</span></td>
+        <td>$${e.cost}</td>
+        <td>${e.date}</td>
+        <td>${e.description}</td>
+      </tr>
+    `;
+  });
+}
+
+const modalExpense = document.getElementById('modal-expense');
+const formExpense = document.getElementById('form-expense');
+const selectExpenseVehicle = document.getElementById('expense-vehicle');
+
+document.getElementById('btn-add-expense').addEventListener('click', async () => {
+  formExpense.reset();
+  document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
+
+  try {
+    const res = await authFetch(`${API_BASE}/vehicles`);
+    const vehicles = await res.json();
+    selectExpenseVehicle.innerHTML = '<option value="">-- Choose Vehicle --</option>';
+    vehicles.forEach(v => {
+      selectExpenseVehicle.innerHTML += `<option value="${v.id}">${v.name_model} (${v.registration_number})</option>`;
+    });
+    modalExpense.classList.add('show');
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+formExpense.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = {
+    vehicle_id: parseInt(selectExpenseVehicle.value),
+    type: document.getElementById('expense-type').value,
+    cost: parseFloat(document.getElementById('expense-cost').value),
+    date: document.getElementById('expense-date').value,
+    description: document.getElementById('expense-desc').value.trim()
+  };
+
+  try {
+    const res = await authFetch(`${API_BASE}/expenses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    modalExpense.classList.remove('show');
+    showNotification('Expense recorded.', 'success');
+    fetchExpenses();
+  } catch (err) {
+    showNotification(err.message, 'danger');
+  }
+});
+
+// =================---------------- REPORTS & ANALYTICS MODULE ----------------=================
+
+async function fetchReports() {
+  try {
+    const res = await authFetch(`${API_BASE}/reports/detail`);
+    state.reports = await res.json();
+    renderReports();
+  } catch (err) {
+    showNotification('Error loading reports: ' + err.message, 'danger');
+  }
+}
+
+function renderReports() {
+  const tbody = document.getElementById('tbody-reports');
+  tbody.innerHTML = '';
+
+  state.reports.forEach(r => {
+    let roiClass = 'badge-success';
+    if (parseFloat(r.roi) < 0) roiClass = 'badge-danger';
+    
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${r.name_model} (${r.registration_number})</strong></td>
+        <td>${r.type}</td>
+        <td>${r.totalDistance} km</td>
+        <td>${r.totalFuelLiters} L</td>
+        <td>$${r.totalFuelCost}</td>
+        <td>$${r.totalMaintenanceCost}</td>
+        <td>$${r.totalOpCost}</td>
+        <td>$${r.totalRevenue}</td>
+        <td>${r.fuelEfficiency} km/L</td>
+        <td><span class="badge ${roiClass}">${(r.roi * 100).toFixed(2)}%</span></td>
+      </tr>
+    `;
+  });
+
+  // Attach auth token to export download link dynamically
+  const exportBtn = document.getElementById('btn-csv-export');
+  exportBtn.href = `${API_BASE}/reports/export?token=${state.token}`;
+  
+  // Custom override to intercept export clicked to send header if needed
+  exportBtn.onclick = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`${API_BASE}/reports/export`, {
+        headers: { 'Authorization': `Bearer ${state.token}` }
+      });
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "transitops_fleet_report.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      showNotification('CSV export failed: ' + err.message, 'danger');
+    }
+  };
+}
+
+// =================---------------- MODAL DISMISS CONTROLS ----------------=================
+
+document.querySelectorAll('.btn-close-modal').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('.modal').forEach(m => m.classList.remove('show'));
+  });
+});
+
+// =================---------------- THEME / TOGGLE CONFIGS ----------------=================
+
+const themeToggleBtn = document.getElementById('btn-theme-toggle');
+const htmlEl = document.documentElement;
+
+themeToggleBtn.addEventListener('click', () => {
+  const currentTheme = htmlEl.getAttribute('data-theme');
+  const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+  htmlEl.setAttribute('data-theme', newTheme);
+  localStorage.setItem('transitops_theme', newTheme);
+});
+
+// Load theme on startup
+const savedTheme = localStorage.getItem('transitops_theme') || 'dark';
+htmlEl.setAttribute('data-theme', savedTheme);
+
+// Initialize App
+checkAuth();
