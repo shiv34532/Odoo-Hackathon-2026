@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { getDb, initDb } = require('./database');
+const TripService = require('./tripService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -349,29 +350,20 @@ app.post('/api/trips', authenticateToken, async (req, res) => {
 
   try {
     const db = await getDb();
+    const tripId = await TripService.createTrip(db, {
+      source,
+      destination,
+      vehicleId: vehicle_id,
+      driverId: driver_id,
+      cargoWeight: cargo_weight,
+      plannedDistance: planned_distance,
+      revenue
+    });
 
-    // Verify entities exist
-    const vehicle = await db.get('SELECT * FROM vehicles WHERE id = ?', [vehicle_id]);
-    const driver = await db.get('SELECT * FROM drivers WHERE id = ?', [driver_id]);
-
-    if (!vehicle) return res.status(400).json({ error: 'Invalid Vehicle selected.' });
-    if (!driver) return res.status(400).json({ error: 'Invalid Driver selected.' });
-
-    // Cargo Weight Limit Check
-    if (cargo_weight > vehicle.max_load_capacity) {
-      return res.status(400).json({ error: `Cargo weight (${cargo_weight} kg) exceeds vehicle maximum capacity (${vehicle.max_load_capacity} kg).` });
-    }
-
-    const result = await db.run(
-      `INSERT INTO trips (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'Draft')`,
-      [source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue || 0]
-    );
-
-    const newTrip = await db.get('SELECT * FROM trips WHERE id = ?', [result.lastID]);
+    const newTrip = await db.get('SELECT * FROM trips WHERE id = ?', [tripId]);
     res.status(201).json(newTrip);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -381,51 +373,10 @@ app.put('/api/trips/:id/dispatch', authenticateToken, async (req, res) => {
 
   try {
     const db = await getDb();
-    const trip = await db.get('SELECT * FROM trips WHERE id = ?', [id]);
-    if (!trip) return res.status(404).json({ error: 'Trip not found' });
-    if (trip.status !== 'Draft') return res.status(400).json({ error: 'Only Draft trips can be dispatched.' });
-
-    const vehicle = await db.get('SELECT * FROM vehicles WHERE id = ?', [trip.vehicle_id]);
-    const driver = await db.get('SELECT * FROM drivers WHERE id = ?', [trip.driver_id]);
-
-    // Mandatory Rule 1: Vehicle Retired/In-Shop cannot be dispatched
-    if (vehicle.status === 'Retired' || vehicle.status === 'In Shop') {
-      return res.status(400).json({ error: `Vehicle is currently ${vehicle.status} and cannot be dispatched.` });
-    }
-
-    // Mandatory Rule 2: Driver expired license/suspended cannot be assigned
-    if (driver.status === 'Suspended') {
-      return res.status(400).json({ error: 'Driver is currently Suspended.' });
-    }
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (driver.license_expiry_date < todayStr) {
-      return res.status(400).json({ error: `Driver license is expired (Expiry: ${driver.license_expiry_date}).` });
-    }
-
-    // Mandatory Rule 3: Vehicle/Driver already on active trip
-    if (vehicle.status === 'On Trip') {
-      return res.status(400).json({ error: 'Vehicle is already assigned to another active trip.' });
-    }
-    if (driver.status === 'On Trip') {
-      return res.status(400).json({ error: 'Driver is already on another active trip.' });
-    }
-
-    // All checks pass - Execute Dispatch in database transaction context
-    await db.run('BEGIN TRANSACTION');
-    try {
-      await db.run("UPDATE trips SET status = 'Dispatched' WHERE id = ?", [id]);
-      await db.run("UPDATE vehicles SET status = 'On Trip' WHERE id = ?", [trip.vehicle_id]);
-      await db.run("UPDATE drivers SET status = 'On Trip' WHERE id = ?", [trip.driver_id]);
-      await db.run('COMMIT');
-    } catch (txErr) {
-      await db.run('ROLLBACK');
-      throw txErr;
-    }
-
+    await TripService.dispatchTrip(db, parseInt(id));
     res.json({ message: 'Trip dispatched successfully. Vehicle and driver status set to On Trip.' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -440,44 +391,14 @@ app.put('/api/trips/:id/complete', authenticateToken, async (req, res) => {
 
   try {
     const db = await getDb();
-    const trip = await db.get('SELECT * FROM trips WHERE id = ?', [id]);
-    if (!trip) return res.status(404).json({ error: 'Trip not found' });
-    if (trip.status !== 'Dispatched') return res.status(400).json({ error: 'Only Dispatched trips can be completed.' });
-
-    const vehicle = await db.get('SELECT * FROM vehicles WHERE id = ?', [trip.vehicle_id]);
-
-    if (final_odometer < vehicle.odometer) {
-      return res.status(400).json({ error: `Final odometer (${final_odometer} km) cannot be less than initial odometer (${vehicle.odometer} km).` });
-    }
-
-    await db.run('BEGIN TRANSACTION');
-    try {
-      // 1. Set trip status to Completed
-      const completedTime = new Date().toISOString();
-      await db.run("UPDATE trips SET status = 'Completed', completed_at = ? WHERE id = ?", [completedTime, id]);
-
-      // 2. Set vehicle & driver back to Available, update vehicle odometer
-      await db.run("UPDATE vehicles SET status = 'Available', odometer = ? WHERE id = ?", [final_odometer, trip.vehicle_id]);
-      await db.run("UPDATE drivers SET status = 'Available' WHERE id = ?", [trip.driver_id]);
-
-      // 3. Log Fuel if provided
-      if (fuel_liters > 0 && fuel_cost > 0) {
-        await db.run(
-          `INSERT INTO fuel_logs (vehicle_id, trip_id, liters, cost, date) 
-           VALUES (?, ?, ?, ?, ?)`,
-          [trip.vehicle_id, id, fuel_liters, fuel_cost, completedTime.split('T')[0]]
-        );
-      }
-
-      await db.run('COMMIT');
-    } catch (txErr) {
-      await db.run('ROLLBACK');
-      throw txErr;
-    }
-
+    await TripService.completeTrip(db, parseInt(id), {
+      finalOdometer: final_odometer,
+      fuelLiters: fuel_liters || 0,
+      fuelCost: fuel_cost || 0
+    });
     res.json({ message: 'Trip completed successfully.' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -487,30 +408,10 @@ app.put('/api/trips/:id/cancel', authenticateToken, async (req, res) => {
 
   try {
     const db = await getDb();
-    const trip = await db.get('SELECT * FROM trips WHERE id = ?', [id]);
-    if (!trip) return res.status(404).json({ error: 'Trip not found' });
-
-    if (trip.status === 'Completed' || trip.status === 'Cancelled') {
-      return res.status(400).json({ error: `Cannot cancel a trip that is already ${trip.status}.` });
-    }
-
-    await db.run('BEGIN TRANSACTION');
-    try {
-      await db.run("UPDATE trips SET status = 'Cancelled' WHERE id = ?", [id]);
-      // If it was dispatched, restore vehicle and driver to Available
-      if (trip.status === 'Dispatched') {
-        await db.run("UPDATE vehicles SET status = 'Available' WHERE id = ?", [trip.vehicle_id]);
-        await db.run("UPDATE drivers SET status = 'Available' WHERE id = ?", [trip.driver_id]);
-      }
-      await db.run('COMMIT');
-    } catch (txErr) {
-      await db.run('ROLLBACK');
-      throw txErr;
-    }
-
+    await TripService.cancelTrip(db, parseInt(id));
     res.json({ message: 'Trip cancelled successfully.' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 });
 

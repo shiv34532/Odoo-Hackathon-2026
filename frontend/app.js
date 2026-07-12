@@ -1408,5 +1408,14 @@ themeToggleBtn.addEventListener('click', () => {
 const savedTheme = localStorage.getItem('transitops_theme') || 'dark';
 htmlEl.setAttribute('data-theme', savedTheme);
 
+// Bind inline action handlers explicitly to the window object to prevent scoping errors
+window.openVehicleModal = openVehicleModal;
+window.deleteVehicle = deleteVehicle;
+window.openDriverModal = openDriverModal;
+window.deleteDriver = deleteDriver;
+window.dispatchTrip = dispatchTrip;
+window.openCompleteTripModal = openCompleteTripModal;
+window.cancelTrip = cancelTrip;
+
 // Initialize App
 checkAuth();
