@@ -3,8 +3,23 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const nodemailer = require('nodemailer');
 const { getDb, initDb } = require('./database');
 const TripService = require('./services/tripService');
+
+// Multer config for vehicle document uploads
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
+    cb(null, `vehicle-${req.params.id}-${unique}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -735,6 +750,84 @@ app.get('/api/reports/export', authenticateToken, async (req, res) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=transitops_fleet_report.csv');
     res.status(200).send(csv);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Serve uploaded vehicle documents
+app.use('/uploads', authenticateToken, express.static(path.join(__dirname, '../uploads')));
+
+// -------- VEHICLE DOCUMENTS ROUTES --------
+
+// List documents for a vehicle
+app.get('/api/vehicles/:id/documents', authenticateToken, (req, res) => {
+  const vehicleId = req.params.id;
+  const files = fs.readdirSync(uploadDir)
+    .filter(f => f.startsWith(`vehicle-${vehicleId}-`))
+    .map(f => ({ name: f.replace(/^vehicle-\d+-\d+-(.*)$/, (_, orig) => orig.replace(/^\d+-/, '')), filename: f, url: `/uploads/${f}` }));
+  res.json(files);
+});
+
+// Upload document for a vehicle
+app.post('/api/vehicles/:id/documents', authenticateToken, upload.single('document'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  res.json({ message: 'Document uploaded successfully', filename: req.file.filename, url: `/uploads/${req.file.filename}` });
+});
+
+// Delete a vehicle document
+app.delete('/api/vehicles/:id/documents/:filename', authenticateToken, (req, res) => {
+  const filePath = path.join(uploadDir, req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+  fs.unlinkSync(filePath);
+  res.json({ message: 'Document deleted' });
+});
+
+// -------- EMAIL REMINDER ROUTE --------
+app.post('/api/drivers/send-reminders', authenticateToken, async (req, res) => {
+  try {
+    const db = await getDb();
+    const today = new Date().toISOString().split('T')[0];
+    const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Find drivers with expired or expiring licenses
+    const drivers = await db.all(
+      `SELECT * FROM drivers WHERE license_expiry_date <= ? ORDER BY license_expiry_date ASC`,
+      [thirtyDays]
+    );
+
+    if (drivers.length === 0) {
+      return res.json({ message: 'No expiring licenses found. All drivers are compliant!', sent: 0 });
+    }
+
+    // Create Ethereal test account (fake SMTP — works without real email config)
+    const testAccount = await nodemailer.createTestAccount();
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: { user: testAccount.user, pass: testAccount.pass }
+    });
+
+    const reminderList = drivers.map(d => {
+      const expired = d.license_expiry_date < today;
+      return `• ${d.name} (${d.license_number}) — License ${expired ? 'EXPIRED' : 'expiring'} on ${d.license_expiry_date}`;
+    }).join('\n');
+
+    const info = await transporter.sendMail({
+      from: '"TransitOps Safety" <safety@transitops.com>',
+      to: 'fleet-manager@transitops.com',
+      subject: `⚠️ TransitOps: ${drivers.length} Driver License Alert(s)`,
+      text: `Dear Fleet Manager,\n\nThe following drivers require immediate attention:\n\n${reminderList}\n\nPlease ensure renewals are processed promptly.\n\nRegards,\nTransitOps Safety System`,
+      html: `<h2>⚠️ Driver License Alerts</h2><p>The following drivers require immediate attention:</p><ul>${drivers.map(d => `<li><strong>${d.name}</strong> (${d.license_number}) — ${d.license_expiry_date < today ? '<span style="color:red">EXPIRED</span>' : 'Expiring'} on ${d.license_expiry_date}</li>`).join('')}</ul><br><p>Regards,<br><strong>TransitOps Safety System</strong></p>`
+    });
+
+    res.json({
+      message: `Reminders sent for ${drivers.length} driver(s)!`,
+      sent: drivers.length,
+      drivers: drivers.map(d => ({ name: d.name, license: d.license_number, expiry: d.license_expiry_date, expired: d.license_expiry_date < today })),
+      previewUrl: nodemailer.getTestMessageUrl(info) // Ethereal preview link
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

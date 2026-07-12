@@ -888,12 +888,17 @@ function renderVehicles() {
     if (v.status === 'In Shop') statusClass = 'badge-warning';
     if (v.status === 'Retired') statusClass = 'badge-danger';
 
-    const actionHtml = state.user.role === 'Fleet Manager' ? `
+    const managerActions = state.user.role === 'Fleet Manager' ? `
+        <a class="btn-row-action edit" onclick="openVehicleModal(${v.id})" title="Edit Vehicle"><i class="bx bx-edit-alt"></i></a>
+        <a class="btn-row-action delete" onclick="deleteVehicle(${v.id})" title="Delete Vehicle"><i class="bx bx-trash"></i></a>` : '';
+
+    const actionHtml = `
       <td class="row-actions">
-        <a class="btn-row-action edit" onclick="openVehicleModal(${v.id})" title="Edit"><i class="bx bx-edit-alt"></i></a>
-        <a class="btn-row-action delete" onclick="deleteVehicle(${v.id})" title="Delete"><i class="bx bx-trash"></i></a>
+        <a class="btn-row-action" onclick="openDocumentModal(${v.id}, '${v.name_model}')" title="Vehicle Documents" style="color:var(--color-primary);"><i class="bx bx-folder-open"></i></a>
+        ${managerActions}
       </td>
-    ` : '';
+    `;
+
 
     let iconSrc = 'assets/van.png';
     if (v.type === 'Truck') iconSrc = 'assets/truck.png';
@@ -1679,6 +1684,172 @@ window.deleteDriver = deleteDriver;
 window.dispatchTrip = dispatchTrip;
 window.openCompleteTripModal = openCompleteTripModal;
 window.cancelTrip = cancelTrip;
+window.openDocumentModal = openDocumentModal;
+
+// =================-------- PDF EXPORT --------=================
+document.getElementById('btn-pdf-export').addEventListener('click', () => {
+  const { jsPDF } = window.jspdf;
+  if (!jsPDF) { showNotification('PDF library not loaded. Try again.', 'danger'); return; }
+  if (!state.reports || state.reports.length === 0) { showNotification('No report data to export.', 'danger'); return; }
+
+  const doc = new jsPDF({ orientation: 'landscape' });
+
+  // Header
+  doc.setFontSize(18);
+  doc.setTextColor(99, 102, 241);
+  doc.text('TransitOps — Fleet ROI & Analytics Report', 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+
+  // Table
+  doc.autoTable({
+    startY: 32,
+    head: [['Vehicle', 'Type', 'Distance (km)', 'Fuel (L)', 'Fuel Cost ($)', 'Maint Cost ($)', 'Op Cost ($)', 'Revenue ($)', 'Fuel Eff (km/L)', 'ROI (%)']],
+    body: state.reports.map(r => [
+      `${r.name_model}\n${r.registration_number}`,
+      r.type,
+      Number(r.totalDistance || 0).toFixed(1),
+      Number(r.totalFuelLiters || 0).toFixed(1),
+      Number(r.totalFuelCost || 0).toFixed(2),
+      Number(r.totalMaintenanceCost || 0).toFixed(2),
+      Number(r.totalOpCost || 0).toFixed(2),
+      Number(r.totalRevenue || 0).toFixed(2),
+      Number(r.fuelEfficiency || 0) > 0 ? Number(r.fuelEfficiency).toFixed(2) : 'N/A',
+      (Number(r.roi || 0) * 100).toFixed(2) + '%'
+    ]),
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [99, 102, 241], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: { 0: { cellWidth: 35 } }
+  });
+
+  doc.save('TransitOps_Fleet_Report.pdf');
+  showNotification('PDF exported successfully!', 'success');
+});
+
+// =================-------- EMAIL REMINDERS --------=================
+document.getElementById('btn-send-reminders').addEventListener('click', async () => {
+  const modal = document.getElementById('modal-reminders');
+  const body = document.getElementById('reminder-result-body');
+  body.innerHTML = '<div style="text-align:center; padding:24px; color:var(--text-sub);"><i class="bx bx-loader-alt bx-spin" style="font-size:32px;"></i><br>Scanning driver licenses & sending alerts...</div>';
+  modal.classList.add('show');
+
+  try {
+    const res = await authFetch(`${API_BASE}/drivers/send-reminders`, { method: 'POST' });
+    const data = await res.json();
+
+    if (data.sent === 0) {
+      body.innerHTML = `<div style="text-align:center; padding:24px;">
+        <i class="bx bx-check-circle" style="font-size:48px; color:var(--color-success);"></i>
+        <h3 style="margin:12px 0 6px; color:var(--color-success)">All Drivers Compliant!</h3>
+        <p style="color:var(--text-sub)">No expiring licenses found. Fleet is fully compliant.</p>
+      </div>`;
+    } else {
+      const rows = data.drivers.map(d => `
+        <div style="display:flex; align-items:center; gap:12px; padding:10px; border-radius:8px; background:var(--bg-card); margin-bottom:8px; border:1px solid var(--border-color);">
+          <i class="bx ${d.expired ? 'bx-error-circle' : 'bx-alarm'}" style="font-size:22px; color:${d.expired ? 'var(--color-danger)' : 'var(--color-warning)'};"></i>
+          <div>
+            <div style="font-weight:600;">${d.name}</div>
+            <div style="font-size:12px; color:var(--text-sub);">${d.license} — <span style="color:${d.expired ? 'var(--color-danger)' : 'var(--color-warning)'};">${d.expired ? '⚠️ EXPIRED' : 'Expiring'}</span> on ${d.expiry}</div>
+          </div>
+        </div>`).join('');
+
+      const previewLink = data.previewUrl
+        ? `<div style="margin-top:12px; padding:10px; background:rgba(99,102,241,0.08); border-radius:8px; font-size:12px;">
+            <i class="bx bx-link-external"></i> <strong>Preview Email:</strong>
+            <a href="${data.previewUrl}" target="_blank" style="color:var(--color-primary); margin-left:4px;">${data.previewUrl}</a>
+          </div>` : '';
+
+      body.innerHTML = `
+        <div style="text-align:center; padding:12px 0 16px;">
+          <i class="bx bx-send" style="font-size:40px; color:var(--color-primary);"></i>
+          <h3 style="margin:8px 0 4px;">Reminders Sent for ${data.sent} Driver(s)</h3>
+          <p style="color:var(--text-sub); font-size:13px;">${data.message}</p>
+        </div>
+        ${rows}
+        ${previewLink}`;
+    }
+  } catch (err) {
+    body.innerHTML = `<div style="text-align:center; padding:24px; color:var(--color-danger);">
+      <i class="bx bx-error" style="font-size:36px;"></i><br>Error: ${err.message}
+    </div>`;
+  }
+});
+
+// =================-------- VEHICLE DOCUMENT MANAGEMENT --------=================
+let currentDocVehicleId = null;
+
+async function openDocumentModal(vehicleId, vehicleName) {
+  currentDocVehicleId = vehicleId;
+  const modal = document.getElementById('modal-documents');
+  document.getElementById('doc-vehicle-info').innerHTML = `<i class="bx bx-car"></i> <strong>${vehicleName}</strong> — Registration Documents & Files`;
+  document.getElementById('doc-file-input').value = '';
+  modal.classList.add('show');
+  await refreshDocList();
+}
+
+async function refreshDocList() {
+  const docList = document.getElementById('doc-list');
+  docList.innerHTML = '<div style="color:var(--text-sub); font-size:13px; padding:8px;">Loading documents...</div>';
+
+  try {
+    const res = await authFetch(`${API_BASE}/vehicles/${currentDocVehicleId}/documents`);
+    const files = await res.json();
+
+    if (!files.length) {
+      docList.innerHTML = '<div style="color:var(--text-muted); font-size:13px; padding:8px; text-align:center;"><i class="bx bx-folder-open" style="font-size:28px; display:block; margin-bottom:4px;"></i>No documents uploaded yet.</div>';
+      return;
+    }
+
+    docList.innerHTML = files.map(f => `
+      <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; background:var(--bg-card); border:1px solid var(--border-color); margin-bottom:8px;">
+        <i class="bx ${f.name.endsWith('.pdf') ? 'bxs-file-pdf' : 'bxs-file-image'}" style="font-size:22px; color:var(--color-primary);"></i>
+        <span style="flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
+        <a href="${f.url}" target="_blank" class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;"><i class="bx bx-download"></i> View</a>
+        <button onclick="deleteDocument('${f.filename}')" class="btn btn-danger btn-sm" style="padding:4px 10px; font-size:12px;"><i class="bx bx-trash"></i></button>
+      </div>`).join('');
+  } catch (err) {
+    docList.innerHTML = `<div style="color:var(--color-danger); font-size:13px; padding:8px;">Error: ${err.message}</div>`;
+  }
+}
+
+document.getElementById('btn-upload-doc').addEventListener('click', async () => {
+  const fileInput = document.getElementById('doc-file-input');
+  if (!fileInput.files.length) { showNotification('Please choose a file first.', 'danger'); return; }
+
+  const formData = new FormData();
+  formData.append('document', fileInput.files[0]);
+
+  try {
+    const res = await fetch(`${API_BASE}/vehicles/${currentDocVehicleId}/documents`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${state.token}` },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    showNotification('Document uploaded successfully!', 'success');
+    fileInput.value = '';
+    await refreshDocList();
+  } catch (err) {
+    showNotification('Upload failed: ' + err.message, 'danger');
+  }
+});
+
+async function deleteDocument(filename) {
+  if (!confirm('Delete this document?')) return;
+  try {
+    const res = await authFetch(`${API_BASE}/vehicles/${currentDocVehicleId}/documents/${filename}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    showNotification('Document deleted.', 'success');
+    await refreshDocList();
+  } catch (err) {
+    showNotification('Delete failed: ' + err.message, 'danger');
+  }
+}
+window.deleteDocument = deleteDocument;
 
 // Initialize App
 checkAuth();

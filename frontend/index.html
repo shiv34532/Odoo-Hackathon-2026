@@ -12,6 +12,9 @@
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
   <!-- Chart.js CDN for interactive visual analytics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- jsPDF + AutoTable for PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <!-- Refined stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -456,7 +459,12 @@
             <i class="bx bx-search"></i>
             <input type="text" id="search-drivers" placeholder="Search by name, license number...">
           </div>
-          <button id="btn-add-driver" class="btn btn-primary rbac-safety-manager-only"><i class="bx bx-plus"></i> Add Driver Profile</button>
+          <div style="display:flex;gap:10px;">
+            <button id="btn-send-reminders" class="btn btn-secondary" title="Send email alerts for expiring licenses">
+              <i class="bx bx-envelope"></i> Send License Reminders
+            </button>
+            <button id="btn-add-driver" class="btn btn-primary rbac-safety-manager-only"><i class="bx bx-plus"></i> Add Driver Profile</button>
+          </div>
         </div>
 
         <div class="table-container card">
@@ -641,9 +649,14 @@
 
         <div class="card-table-actions">
           <div class="tab-sub-info">Analyze vehicle ROI, fuel efficiencies, and total operating expenditures.</div>
-          <a href="#" id="btn-csv-export" class="btn btn-secondary">
-            <i class="bx bx-download"></i> Export Data CSV
-          </a>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="#" id="btn-csv-export" class="btn btn-secondary">
+              <i class="bx bx-download"></i> Export CSV
+            </a>
+            <button id="btn-pdf-export" class="btn btn-primary">
+              <i class="bx bxs-file-pdf"></i> Export PDF
+            </button>
+          </div>
         </div>
 
         <!-- Analytical comparison table -->
@@ -1000,6 +1013,43 @@
           <button type="submit" class="btn btn-primary">File Expense Log</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Vehicle Document Management -->
+  <div id="modal-documents" class="modal">
+    <div class="modal-content card" style="max-width:600px;">
+      <div class="modal-header">
+        <h2><i class="bx bx-folder-open" style="margin-right:8px;"></i>Vehicle Documents</h2>
+        <button class="btn-close-modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div id="doc-vehicle-info" style="padding:0 0 16px 0; color:var(--text-sub); font-size:13px;"></div>
+      <div id="doc-list" style="min-height:80px; margin-bottom:16px;"></div>
+      <div style="border-top:1px solid var(--border-color); padding-top:16px;">
+        <label style="font-weight:600; font-size:13px; margin-bottom:8px; display:block;"><i class="bx bx-upload"></i> Upload New Document</label>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <input type="file" id="doc-file-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="flex:1; min-width:180px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px; padding:8px; color:var(--text-main); font-size:13px;">
+          <button id="btn-upload-doc" class="btn btn-primary"><i class="bx bx-upload"></i> Upload</button>
+        </div>
+        <p style="font-size:11px; color:var(--text-muted); margin-top:6px;">Supported: PDF, JPG, PNG, DOC (max 5MB)</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Email Reminder Results -->
+  <div id="modal-reminders" class="modal">
+    <div class="modal-content card" style="max-width:560px;">
+      <div class="modal-header">
+        <h2><i class="bx bx-envelope" style="margin-right:8px;"></i>License Reminder Alerts</h2>
+        <button class="btn-close-modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div id="reminder-result-body" style="padding:8px 0;"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">Close</button>
+      </div>
     </div>
   </div>
 
