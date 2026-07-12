@@ -97,6 +97,21 @@ body {
   pointer-events: none;
 }
 
+.bg-pattern-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('assets/bg_pattern.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.05;
+  pointer-events: none;
+  transition: opacity var(--transition-smooth);
+}
+
 .blob {
   position: absolute;
   border-radius: 50%;
