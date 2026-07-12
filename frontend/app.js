@@ -594,8 +594,9 @@ function updateFleetChart(available, active, inShop) {
         legend: {
           position: 'bottom',
           labels: {
-            color: textColor,
-            font: { family: 'Plus Jakarta Sans', size: 12, weight: '500' },
+            // Force high-contrast readable colors regardless of theme
+            color: isLight ? '#1e293b' : '#f1f5f9',
+            font: { family: 'Plus Jakarta Sans', size: 12, weight: '600' },
             padding: 18,
             boxWidth: 12,
             boxHeight: 12,
@@ -612,6 +613,7 @@ function updateFleetChart(available, active, inShop) {
                   fillStyle: ds.backgroundColor[i],
                   strokeStyle: 'transparent',
                   lineWidth: 0,
+                  fontColor: isLight ? '#1e293b' : '#f1f5f9',
                   hidden: meta.data[i] ? meta.data[i].hidden : false,
                   index: i
                 };
@@ -620,18 +622,27 @@ function updateFleetChart(available, active, inShop) {
           }
         },
         tooltip: {
-          backgroundColor: tooltipBg,
-          borderColor: tooltipBorder,
+          // 'average' positions tooltip outside the donut — NOT inside the hole
+          position: 'average',
+          backgroundColor: isLight ? 'rgba(255,255,255,0.98)' : 'rgba(15,23,42,0.98)',
+          borderColor: isLight ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.4)',
           borderWidth: 1,
-          titleColor: tooltipText,
-          bodyColor: tooltipText,
+          // Explicit high-contrast text colors
+          titleColor: isLight ? '#0f172a' : '#ffffff',
+          bodyColor: isLight ? '#334155' : '#e2e8f0',
           padding: 12,
           cornerRadius: 10,
+          displayColors: true,
+          boxWidth: 10,
+          boxHeight: 10,
           callbacks: {
+            title(items) {
+              return items[0]?.label || '';
+            },
             label(context) {
               const val = context.parsed || 0;
               const pct = total > 0 ? Math.round((val / total) * 100) : 0;
-              return `  ${context.label}: ${val} vehicles — ${pct}%`;
+              return `  ${val} vehicles  (${pct}%)`;
             }
           }
         }
