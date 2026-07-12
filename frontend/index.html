@@ -25,48 +25,63 @@
 
   <!-- ================= AUTHENTICATION / LOGIN VIEW ================= -->
   <div id="login-container" class="auth-wrapper">
-    <div class="auth-card">
-      <div class="auth-header">
-        <div class="logo">
-          <i class="bx bxs-directions logo-icon"></i>
-          <span>TransitOps</span>
+    <div class="auth-split-layout">
+      <!-- Left Column: Login Form -->
+      <div class="auth-left-pane">
+        <div class="auth-card">
+          <div class="auth-header">
+            <div class="logo">
+              <i class="bx bxs-directions logo-icon"></i>
+              <span>TransitOps</span>
+            </div>
+            <h2>Enterprise Access</h2>
+            <p>Log in to manage operations, assets, and analytics.</p>
+          </div>
+
+          <div id="login-error-alert" class="alert alert-danger hidden"></div>
+
+          <form id="login-form">
+            <div class="form-group">
+              <label for="login-email">Email Address</label>
+              <div class="input-wrapper">
+                <i class="bx bx-envelope input-icon"></i>
+                <input type="email" id="login-email" placeholder="name@company.com" required value="manager@transitops.com">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="login-password">Password</label>
+              <div class="input-wrapper">
+                <i class="bx bx-lock-alt input-icon"></i>
+                <input type="password" id="login-password" placeholder="••••••••" required value="manager123">
+              </div>
+            </div>
+
+            <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block">
+              <span>Login to Console</span>
+              <i class="bx bx-log-in-circle"></i>
+            </button>
+          </form>
+
+          <div class="quick-login-section">
+            <h4>Quick Test Login:</h4>
+            <div class="quick-login-pills">
+              <button class="pill-btn" onclick="quickLogin('manager')">Fleet Manager</button>
+              <button class="pill-btn" onclick="quickLogin('safety')">Safety Officer</button>
+              <button class="pill-btn" onclick="quickLogin('driver')">Driver</button>
+              <button class="pill-btn" onclick="quickLogin('finance')">Finance Analyst</button>
+            </div>
+          </div>
         </div>
-        <h2>Enterprise Access</h2>
-        <p>Log in to manage operations, assets, and analytics.</p>
       </div>
-
-      <div id="login-error-alert" class="alert alert-danger hidden"></div>
-
-      <form id="login-form">
-        <div class="form-group">
-          <label for="login-email">Email Address</label>
-          <div class="input-wrapper">
-            <i class="bx bx-envelope input-icon"></i>
-            <input type="email" id="login-email" placeholder="name@company.com" required value="manager@transitops.com">
+      <!-- Right Column: Interactive Banner graphic -->
+      <div class="auth-right-pane">
+        <div class="auth-banner-wrap">
+          <img src="assets/banner.png" alt="TransitOps Logistics Banner" class="auth-banner-img">
+          <div class="auth-banner-overlay">
+            <h2>TransitOps Console</h2>
+            <p>Smart Fleet Operations, Zero Friction. Powered by Advanced Agentic Logistics.</p>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label for="login-password">Password</label>
-          <div class="input-wrapper">
-            <i class="bx bx-lock-alt input-icon"></i>
-            <input type="password" id="login-password" placeholder="••••••••" required value="manager123">
-          </div>
-        </div>
-
-        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block">
-          <span>Login to Console</span>
-          <i class="bx bx-log-in-circle"></i>
-        </button>
-      </form>
-
-      <div class="quick-login-section">
-        <h4>Quick Test Login:</h4>
-        <div class="quick-login-pills">
-          <button class="pill-btn" onclick="quickLogin('manager')">Fleet Manager</button>
-          <button class="pill-btn" onclick="quickLogin('safety')">Safety Officer</button>
-          <button class="pill-btn" onclick="quickLogin('driver')">Driver</button>
-          <button class="pill-btn" onclick="quickLogin('finance')">Finance Analyst</button>
         </div>
       </div>
     </div>
